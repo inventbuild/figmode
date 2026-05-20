@@ -6,65 +6,151 @@
     <style>
       :root {
         color-scheme: light dark;
-        font-family: Inter, system-ui, sans-serif;
-        font-size: 11px;
-        line-height: 1.35;
+        --fm-white: #ffffff;
+        --fm-black: #000000;
+        --fm-gray: #bfbfbf;
+        --fm-dark-gray: #64696e;
+        --fm-light-gray: #d7d7d7;
+        font-family: Inter, system-ui, -apple-system, sans-serif;
       }
 
       * {
         box-sizing: border-box;
       }
 
+      html,
       body {
-        margin: 0;
-        padding: 8px 10px;
-        background: var(--figma-color-bg);
-        color: var(--figma-color-text);
+        overflow: hidden;
       }
 
-      .hud {
+      body {
+        margin: 0;
+        padding: 7px;
+        background: var(--figma-color-bg, var(--fm-white));
+        color: var(--figma-color-text, var(--fm-black));
+        font-size: 12px;
+        line-height: normal;
+      }
+
+      .panel {
         display: flex;
         flex-direction: column;
+        gap: 5px;
+      }
+
+      .divider {
+        background: var(--fm-gray);
+        height: 1px;
+        border: 0;
+        margin: 0;
+        align-self: stretch;
+      }
+
+      .breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--fm-dark-gray);
+        font-size: 10px;
+        font-weight: 400;
+        text-transform: uppercase;
+      }
+
+      .breadcrumb-sep {
+        width: 4px;
+        height: 8px;
+        flex-shrink: 0;
+      }
+
+      .breadcrumb-sep::before {
+        content: "›";
+        display: block;
+        font-size: 10px;
+        line-height: 8px;
+        color: var(--fm-dark-gray);
+      }
+
+      .key-row {
+        display: flex;
+        align-items: center;
         gap: 6px;
       }
 
-      .hud-header {
-        font-weight: 600;
-      }
-
-      .mode-label {
-        color: var(--figma-color-text-secondary);
-        font-weight: 500;
-      }
-
-      .value-buffer {
-        min-height: 14px;
-        color: var(--figma-color-text-brand);
+      .key-pill {
+        background: var(--fm-light-gray);
+        border-radius: 5px;
+        color: var(--fm-black);
+        display: flex;
+        align-items: center;
+        justify-content: center;
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        font-weight: 400;
+        min-width: 30px;
+        padding: 3px 5px;
+        text-transform: lowercase;
       }
 
-      .keys {
-        list-style: none;
-        margin: 0;
-        padding: 0;
+      .key-label {
+        color: var(--fm-black);
+        font-size: 12px;
+        font-weight: 400;
+        white-space: nowrap;
+      }
+
+      .key-label.mode-push {
+        font-weight: 700;
+      }
+
+      .columns-two {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+      }
+
+      .column {
         display: flex;
         flex-direction: column;
-        gap: 2px;
+        gap: 5px;
       }
 
-      .keys li {
+      .columns-grid {
         display: flex;
-        gap: 8px;
+        gap: 10px;
+        align-items: flex-start;
       }
 
-      .key {
-        min-width: 42px;
-        color: var(--figma-color-text-secondary);
+      .alignment-grid {
+        display: grid;
+        grid-template-columns: repeat(3, max-content);
+        column-gap: 10px;
+        row-gap: 5px;
+        align-items: center;
+      }
+
+      .list {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      .footer {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+      }
+
+      .value-display {
+        color: var(--fm-black);
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        font-weight: 400;
+        min-height: 16px;
       }
 
       .error {
-        color: var(--figma-color-text-danger);
+        color: var(--figma-color-text-danger, #f24822);
+        font-size: 11px;
         min-height: 14px;
       }
 
@@ -80,8 +166,6 @@
         display: none;
         flex-direction: column;
         gap: 8px;
-        max-height: 160px;
-        overflow: auto;
       }
 
       .settings.open {
@@ -91,16 +175,18 @@
       .settings h2 {
         margin: 0;
         font-size: 12px;
+        font-weight: 700;
       }
 
       .binding-row {
         display: grid;
-        grid-template-columns: 1fr 56px;
+        grid-template-columns: 1fr 72px;
         gap: 6px;
         align-items: center;
       }
 
       .binding-row label {
+        font-size: 11px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -109,11 +195,12 @@
       .binding-row input {
         width: 100%;
         font: inherit;
+        font-size: 11px;
         padding: 2px 4px;
-        border: 1px solid var(--figma-color-border);
+        border: 1px solid var(--figma-color-border, var(--fm-gray));
         border-radius: 4px;
-        background: var(--figma-color-bg);
-        color: var(--figma-color-text);
+        background: var(--figma-color-bg, var(--fm-white));
+        color: var(--figma-color-text, var(--fm-black));
       }
 
       .settings-actions {
@@ -123,17 +210,18 @@
 
       button {
         font: inherit;
+        font-size: 11px;
         padding: 4px 8px;
-        border: 1px solid var(--figma-color-border);
+        border: 1px solid var(--figma-color-border, var(--fm-gray));
         border-radius: 4px;
-        background: var(--figma-color-bg-secondary);
-        color: var(--figma-color-text);
+        background: var(--figma-color-bg-secondary, var(--fm-light-gray));
+        color: var(--figma-color-text, var(--fm-black));
         cursor: pointer;
       }
 
       button.primary {
-        background: var(--figma-color-bg-brand);
-        color: var(--figma-color-text-onbrand);
+        background: var(--figma-color-bg-brand, var(--fm-black));
+        color: var(--figma-color-text-onbrand, var(--fm-white));
         border-color: transparent;
       }
 
@@ -141,13 +229,14 @@
         display: none;
         gap: 6px;
         align-items: center;
+        font-size: 11px;
       }
 
       .confirm.open {
         display: flex;
       }
 
-      .hud.hidden {
+      .panel.hidden {
         display: none;
       }
     </style>
@@ -162,12 +251,7 @@
       aria-label="Figmode keyboard capture"
     />
 
-    <div id="hud" class="hud">
-      <div class="hud-header">Figmode: <span id="mode-label" class="mode-label">—</span></div>
-      <div id="value-buffer" class="value-buffer"></div>
-      <ul id="keys" class="keys"></ul>
-      <div id="error" class="error"></div>
-    </div>
+    <div id="panel" class="panel"></div>
 
     <div id="settings" class="settings">
       <h2>Settings</h2>
@@ -183,25 +267,50 @@
       </div>
     </div>
 
+    <div id="error" class="error"></div>
+
     <script>
       const capture = document.getElementById("capture");
-      const hud = document.getElementById("hud");
+      const panel = document.getElementById("panel");
       const settings = document.getElementById("settings");
-      const modeLabel = document.getElementById("mode-label");
-      const valueBuffer = document.getElementById("value-buffer");
-      const keysList = document.getElementById("keys");
       const errorEl = document.getElementById("error");
       const bindingList = document.getElementById("binding-list");
       const confirmReset = document.getElementById("confirm-reset");
 
       let timeoutMs = 1000;
+      let timeoutEnabled = true;
       let timeoutId = null;
       let settingsOpen = false;
       let bindings = [];
       let recordingBindingId = null;
+      let lastReportedWidth = 0;
+      let lastReportedHeight = 0;
 
       function post(message) {
         parent.postMessage({ pluginMessage: message }, "*");
+      }
+
+      const BODY_PADDING = 14;
+
+      function reportSize() {
+        requestAnimationFrame(() => {
+          const content = settingsOpen ? settings : panel;
+          const width = Math.ceil(Math.max(content.scrollWidth, errorEl.scrollWidth) + BODY_PADDING);
+          const height = Math.ceil(
+            (settingsOpen ? settings.offsetHeight : panel.offsetHeight) +
+              errorEl.offsetHeight +
+              BODY_PADDING,
+          );
+          if (width <= 0 || height <= 0) {
+            return;
+          }
+          if (width === lastReportedWidth && height === lastReportedHeight) {
+            return;
+          }
+          lastReportedWidth = width;
+          lastReportedHeight = height;
+          post({ type: "ui-resize", width, height });
+        });
       }
 
       function formatKeyFromEvent(event) {
@@ -214,7 +323,7 @@
         let key = event.key;
         if (key === " ") key = "Space";
         if (key.length === 1) {
-          key = event.shiftKey ? key.toUpperCase() : key.toLowerCase();
+          key = key.toLowerCase();
         }
 
         if (!["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
@@ -237,22 +346,92 @@
 
       function armTimer() {
         clearTimer();
-        if (settingsOpen) return;
+        if (!timeoutEnabled || settingsOpen) return;
         timeoutId = setTimeout(() => post({ type: "timeout" }), timeoutMs);
       }
 
-      function renderKeys(keys) {
-        keysList.replaceChildren();
-        for (const item of keys) {
-          const li = document.createElement("li");
-          const key = document.createElement("span");
-          key.className = "key";
-          key.textContent = item.key;
-          const label = document.createElement("span");
+      function el(tag, className, text) {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text !== undefined) node.textContent = text;
+        return node;
+      }
+
+      function renderKeyRow(item) {
+        const row = el("div", "key-row");
+        row.appendChild(el("span", "key-pill", item.key));
+        const label = el("span", item.isModePush ? "key-label mode-push" : "key-label");
+        if (item.isModePush) {
+          label.textContent = "→ " + item.label;
+        } else {
           label.textContent = item.label;
-          li.append(key, label);
-          keysList.appendChild(li);
         }
+        row.appendChild(label);
+        return row;
+      }
+
+      function renderBreadcrumb(crumbs) {
+        const wrap = el("div", "breadcrumb");
+        crumbs.forEach((crumb, index) => {
+          if (index > 0) {
+            wrap.appendChild(el("span", "breadcrumb-sep"));
+          }
+          wrap.appendChild(el("span", null, crumb));
+        });
+        return wrap;
+      }
+
+      function renderFooter(footer) {
+        const wrap = el("div", "footer");
+        footer.forEach((item) => wrap.appendChild(renderKeyRow(item)));
+        return wrap;
+      }
+
+      function renderUiSpec(uiSpec) {
+        panel.replaceChildren();
+
+        if (uiSpec.breadcrumb?.length) {
+          panel.appendChild(renderBreadcrumb(uiSpec.breadcrumb));
+        }
+
+        if (uiSpec.layout === "twoColumn") {
+          const cols = el("div", "columns-two");
+          const left = el("div", "column");
+          const right = el("div", "column");
+          (uiSpec.left || []).forEach((item) => left.appendChild(renderKeyRow(item)));
+          (uiSpec.right || []).forEach((item) => right.appendChild(renderKeyRow(item)));
+          cols.append(left, right);
+          panel.appendChild(cols);
+        } else if (uiSpec.layout === "alignmentGrid") {
+          const grid = el("div", "alignment-grid");
+          (uiSpec.rows || []).forEach((row) => {
+            row.forEach((item) => grid.appendChild(renderKeyRow(item)));
+          });
+          panel.appendChild(grid);
+        } else if (uiSpec.layout === "paddingGrid") {
+          const cols = el("div", "columns-grid");
+          (uiSpec.columns || []).forEach((column) => {
+            const col = el("div", "column");
+            column.forEach((item) => col.appendChild(renderKeyRow(item)));
+            cols.appendChild(col);
+          });
+          panel.appendChild(cols);
+        } else if (uiSpec.layout === "value") {
+          const value = el("div", "value-display");
+          value.textContent = uiSpec.valueText ?? "";
+          panel.appendChild(value);
+          const list = el("div", "list");
+          (uiSpec.items || []).forEach((item) => list.appendChild(renderKeyRow(item)));
+          panel.appendChild(list);
+        } else if (uiSpec.items?.length) {
+          const list = el("div", "list");
+          uiSpec.items.forEach((item) => list.appendChild(renderKeyRow(item)));
+          panel.appendChild(list);
+        }
+
+        panel.appendChild(el("hr", "divider"));
+        panel.appendChild(renderFooter(uiSpec.footer || []));
+        reportSize();
       }
 
       function renderBindings() {
@@ -283,28 +462,31 @@
           row.append(label, input);
           bindingList.appendChild(row);
         }
+        reportSize();
       }
 
       function applyState(payload) {
+        lastReportedWidth = 0;
+        lastReportedHeight = 0;
         settingsOpen = payload.state.settingsOpen;
-        modeLabel.textContent = payload.modeLabel;
-        valueBuffer.textContent = payload.state.valueBuffer
-          ? `Value: ${payload.state.valueBuffer}`
-          : "";
-        renderKeys(payload.availableKeys);
         errorEl.textContent = "";
 
+        if (payload.uiSpec) {
+          renderUiSpec(payload.uiSpec);
+        }
+
         if (settingsOpen) {
-          hud.classList.add("hidden");
+          panel.classList.add("hidden");
           settings.classList.add("open");
           clearTimer();
         } else {
-          hud.classList.remove("hidden");
+          panel.classList.remove("hidden");
           settings.classList.remove("open");
           confirmReset.classList.remove("open");
           armTimer();
           focusCapture();
         }
+        reportSize();
       }
 
       capture.addEventListener("keydown", (event) => {
@@ -312,7 +494,6 @@
         event.stopPropagation();
 
         if (recordingBindingId) {
-          event.preventDefault();
           const key = formatKeyFromEvent(event);
           if (["Control", "Alt", "Shift", "Meta"].includes(event.key)) return;
           post({
@@ -355,9 +536,11 @@
       };
 
       window.addEventListener("blur", () => {
-        if (!settingsOpen) {
-          setTimeout(focusCapture, 0);
-        }
+        window.setTimeout(() => {
+          if (!document.hasFocus()) {
+            post({ type: "close" });
+          }
+        }, 0);
       });
 
       window.onmessage = (event) => {
@@ -367,14 +550,17 @@
         switch (msg.type) {
           case "init":
             timeoutMs = msg.timeoutMs;
+            timeoutEnabled = msg.timeoutEnabled;
             bindings = msg.bindings;
             renderBindings();
             applyState(msg);
             focusCapture();
             break;
           case "state":
-            bindings = msg.bindings || bindings;
-            if (msg.bindings) renderBindings();
+            if (msg.bindings) {
+              bindings = msg.bindings;
+              renderBindings();
+            }
             applyState(msg);
             break;
           case "close":
@@ -384,6 +570,7 @@
             errorEl.textContent = msg.message;
             armTimer();
             focusCapture();
+            reportSize();
             break;
           default:
             break;

@@ -12,7 +12,7 @@ export function createInitialState(): FigmodeState {
 export function getCurrentScope(stack: ModeStackFrame[]): string {
   const top = stack[stack.length - 1];
   if (!top) return "layout";
-  if (top.valueKind) return "layout.spacing.value";
+  if (top.valueKind) return `layout.${top.submode ?? "spacing"}.value`;
   if (top.submode) return `layout.${top.submode}`;
   return top.mode;
 }
@@ -21,9 +21,9 @@ export function getModeLabel(state: FigmodeState): string {
   const top = state.stack[state.stack.length - 1];
   if (!top) return "inactive";
   if (top.valueKind) {
-    const spacing = state.stack.find((frame) => frame.submode === "spacing");
-    if (spacing && top.valueKind === "gap") return "layout > spacing > value";
-    return `layout > spacing > ${top.valueKind}`;
+    const submode = top.submode ?? "spacing";
+    if (top.valueKind === "gap") return "layout > spacing > value";
+    return `layout > padding > ${top.valueKind}`;
   }
   if (top.submode) return `layout > ${top.submode}`;
   return top.mode;
@@ -47,16 +47,24 @@ export function pushValueKind(
   valueKind: NonNullable<ModeStackFrame["valueKind"]>,
 ): FigmodeState {
   const top = state.stack[state.stack.length - 1];
-  if (!top || top.mode !== "layout" || top.submode !== "spacing") return state;
+  if (!top || top.mode !== "layout" || !top.submode) return state;
+
+  if (valueKind === "gap" && top.submode !== "spacing") return state;
+  if (valueKind !== "gap" && top.submode !== "padding") return state;
+
   return {
     ...state,
-    stack: [...state.stack, { mode: "layout", submode: "spacing", valueKind }],
+    stack: [...state.stack, { mode: "layout", submode: top.submode, valueKind }],
     valueBuffer: "",
   };
 }
 
+export function isAtRoot(state: FigmodeState): boolean {
+  return state.stack.length <= 1;
+}
+
 export function popMode(state: FigmodeState): FigmodeState {
-  if (state.stack.length <= 1) return state;
+  if (isAtRoot(state)) return state;
   return {
     ...state,
     stack: state.stack.slice(0, -1),
@@ -76,10 +84,7 @@ export function getAvailableKeys(
   if (state.settingsOpen) return [];
 
   const scope = getCurrentScope(state.stack);
-  const scopes =
-    scope === "layout.spacing.value"
-      ? ["any"]
-      : ["any", scope];
+  const scopes = scope.endsWith(".value") ? ["any"] : ["any", scope];
 
   const seen = new Set<string>();
   const keys: AvailableKey[] = [];
@@ -93,7 +98,10 @@ export function getAvailableKeys(
 
   if (inValueEntry(state)) {
     keys.push({ key: "0-9", label: "Enter numeric value" });
-    keys.push({ key: "Enter", label: "Apply value" });
+    keys.push({ key: "ArrowUp", label: "Increment" });
+    keys.push({ key: "ArrowDown", label: "Decrement" });
+    keys.push({ key: "Backspace", label: "Delete digit" });
+    keys.push({ key: "Enter", label: "Confirm value" });
   }
 
   return keys;

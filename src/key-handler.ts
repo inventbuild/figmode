@@ -1,17 +1,28 @@
 import type { KeyBinding } from "./types";
 import { getCurrentScope, inValueEntry } from "./mode-stack";
 
+export function normalizeKey(key: string): string {
+  const parts = key.split("+");
+  const last = parts[parts.length - 1];
+  if (last.length === 1) {
+    parts[parts.length - 1] = last.toLowerCase();
+  }
+  return parts.join("+");
+}
+
 export function findBindingForKey(
   bindings: KeyBinding[],
   scope: string,
   key: string,
 ): KeyBinding | undefined {
-  const scopes =
-    scope === "layout.spacing.value" ? ["any"] : ["any", scope];
+  const scopes = scope.endsWith(".value") ? ["any"] : ["any", scope];
+  const normalizedKey = normalizeKey(key);
 
   for (const bindingScope of scopes) {
     const match = bindings.find(
-      (binding) => binding.scope === bindingScope && binding.key === key,
+      (binding) =>
+        binding.scope === bindingScope &&
+        normalizeKey(binding.key) === normalizedKey,
     );
     if (match) return match;
   }

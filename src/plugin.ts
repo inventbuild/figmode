@@ -1,24 +1,21 @@
-import { DEFAULT_TIMEOUT_MS } from "./types";
-import type {
-  FigmodeState,
-  KeyBinding,
-  PluginToUiMessage,
-  UiToPluginMessage,
-} from "./types";
+import { DEFAULT_TIMEOUT_MS, TIMEOUT_ENABLED } from "./types";
+import type { FigmodeState, KeyBinding, PluginToUiMessage, UiToPluginMessage, ValueKind } from "./types";
 import { loadBindings, resetBindings, saveBindingOverride } from "./settings";
 import {
   createInitialState,
-  getAvailableKeys,
   getCurrentScope,
   getModeLabel,
   inValueEntry,
+  isAtRoot,
   popMode,
   pushSubmode,
   pushValueKind,
 } from "./mode-stack";
 import { findBindingForKey, isUniversalAction } from "./key-handler";
 import {
-  applyValue,
+  applyNumericValue,
+  getValueForKind,
+  isAbsoluteGap,
   setAlignment,
   setFlow,
   setHorizontalSizing,
@@ -26,20 +23,37 @@ import {
   toggleAutoGap,
   toggleWrap,
 } from "./modes/layout";
-import { ensureAutoLayout, getTargetFrame, requireAutoLayoutFrame } from "./target";
-
-const UI_WIDTH = 200;
-const UI_HEIGHT = 180;
+import {
+  prepareLayoutTarget,
+  requireAutoLayoutFrame,
+  setActiveLayoutTarget,
+} from "./target";
+import { buildUiSpec } from "./ui-spec";
 
 let state: FigmodeState = createInitialState();
 let bindings: KeyBinding[] = [];
 
-function hudPosition(): { x: number; y: number } {
+const HUD_INSET = 10;
+let hudWidth = 0;
+let hudHeight = 0;
+
+function hudPosition(width: number, height: number): { x: number; y: number } {
   const bounds = figma.viewport.bounds;
   return {
-    x: bounds.x + 16,
-    y: bounds.y + bounds.height - UI_HEIGHT - 16,
+    x: bounds.x + HUD_INSET,
+    y: bounds.y + bounds.height - height - HUD_INSET,
   };
+}
+
+function syncHudFrame(width: number, height: number): void {
+  if (width <= 0 || height <= 0) {
+    return;
+  }
+  hudWidth = width;
+  hudHeight = height;
+  figma.ui.resize(width, height);
+  const pos = hudPosition(width, height);
+  figma.ui.reposition(pos.x, pos.y);
 }
 
 function postToUi(message: PluginToUiMessage): void {
@@ -47,11 +61,14 @@ function postToUi(message: PluginToUiMessage): void {
 }
 
 function syncUi(): void {
+  const uiSpec = buildUiSpec(state, bindings);
+  syncHudFrame(uiSpec.width, uiSpec.height);
   postToUi({
     type: "state",
     state: { ...state, stack: [...state.stack] },
-    availableKeys: getAvailableKeys(state, bindings),
+    uiSpec,
     modeLabel: getModeLabel(state),
+    bindings,
   });
 }
 
@@ -64,21 +81,94 @@ function bindingError(message: string): void {
   postToUi({ type: "error", message });
 }
 
+function parseValueBuffer(raw: string): number | null {
+  if (raw === "") {
+    return null;
+  }
+  const value = Number.parseInt(raw, 10);
+  if (Number.isNaN(value) || value < 0) {
+    return null;
+  }
+  return value;
+}
+
+function liveApplyValueBuffer(buffer: string): boolean {
+  const top = state.stack[state.stack.length - 1];
+  const frame = requireAutoLayoutFrame();
+  if (!top?.valueKind || !frame) {
+    return false;
+  }
+
+  const value = parseValueBuffer(buffer);
+  if (value === null) {
+    return false;
+  }
+
+  return applyNumericValue(frame, top.valueKind, value);
+}
+
+function enterValueKindOnState(
+  current: FigmodeState,
+  valueKind: ValueKind,
+): FigmodeState {
+  const frame = requireAutoLayoutFrame();
+  if (!frame) {
+    bindingError("Layout target is no longer available.");
+    return current;
+  }
+
+  const next = pushValueKind(current, valueKind);
+  if (next === current) {
+    return current;
+  }
+
+  return {
+    ...next,
+    valueBuffer: String(getValueForKind(frame, valueKind)),
+  };
+}
+
+function enterValueKind(valueKind: ValueKind): FigmodeState {
+  return enterValueKindOnState(state, valueKind);
+}
+
 function handleValueKey(key: string): FigmodeState {
   const top = state.stack[state.stack.length - 1];
-  if (!top?.valueKind) return state;
+  const frame = requireAutoLayoutFrame();
+  if (!top?.valueKind || !frame) {
+    return state;
+  }
 
   if (key === "Enter") {
-    const frame = requireAutoLayoutFrame();
-    if (frame && applyValue(frame, top.valueKind, state.valueBuffer)) {
+    if (liveApplyValueBuffer(state.valueBuffer)) {
       return popMode({ ...state, valueBuffer: "" });
     }
     bindingError("Enter a valid non-negative integer.");
     return state;
   }
 
+  if (key === "ArrowUp" || key === "ArrowDown") {
+    const delta = key === "ArrowUp" ? 1 : -1;
+    const current =
+      parseValueBuffer(state.valueBuffer) ?? getValueForKind(frame, top.valueKind);
+    const nextValue = Math.max(0, current + delta);
+    const nextBuffer = String(nextValue);
+    applyNumericValue(frame, top.valueKind, nextValue);
+    return { ...state, valueBuffer: nextBuffer };
+  }
+
+  if (key === "Backspace") {
+    const nextBuffer = state.valueBuffer.slice(0, -1);
+    if (nextBuffer !== "") {
+      liveApplyValueBuffer(nextBuffer);
+    }
+    return { ...state, valueBuffer: nextBuffer };
+  }
+
   if (/^\d$/.test(key)) {
-    return { ...state, valueBuffer: state.valueBuffer + key };
+    const nextBuffer = state.valueBuffer + key;
+    liveApplyValueBuffer(nextBuffer);
+    return { ...state, valueBuffer: nextBuffer };
   }
 
   return state;
@@ -87,7 +177,7 @@ function handleValueKey(key: string): FigmodeState {
 function runLayoutBinding(binding: KeyBinding): FigmodeState {
   const frame = requireAutoLayoutFrame();
   if (!frame) {
-    bindingError("Select a single auto-layout frame.");
+    bindingError("Layout target is no longer available.");
     return state;
   }
 
@@ -110,8 +200,15 @@ function runLayoutBinding(binding: KeyBinding): FigmodeState {
       return pushSubmode(state, "height");
     case "layout.submode.alignment":
       return pushSubmode(state, "alignment");
-    case "layout.submode.spacing":
-      return pushSubmode(state, "spacing");
+    case "layout.submode.spacing": {
+      const withSpacing = pushSubmode(state, "spacing");
+      if (isAbsoluteGap(frame)) {
+        return enterValueKindOnState(withSpacing, "gap");
+      }
+      return withSpacing;
+    }
+    case "layout.submode.padding":
+      return pushSubmode(state, "padding");
     case "layout.wrap.toggle":
       toggleWrap(frame);
       return state;
@@ -148,22 +245,24 @@ function runLayoutBinding(binding: KeyBinding): FigmodeState {
       const autoGap = toggleAutoGap(frame);
       const next = { ...state, autoGap };
       if (!autoGap) {
-        return pushValueKind(next, "gap");
+        return enterValueKind("gap");
       }
       return next;
     }
-    case "layout.spacing.paddingTop":
-      return pushValueKind(state, "paddingTop");
-    case "layout.spacing.paddingLeft":
-      return pushValueKind(state, "paddingLeft");
-    case "layout.spacing.paddingRight":
-      return pushValueKind(state, "paddingRight");
-    case "layout.spacing.paddingBottom":
-      return pushValueKind(state, "paddingBottom");
-    case "layout.spacing.paddingX":
-      return pushValueKind(state, "paddingX");
-    case "layout.spacing.paddingY":
-      return pushValueKind(state, "paddingY");
+    case "layout.padding.all":
+      return enterValueKind("paddingAll");
+    case "layout.padding.paddingTop":
+      return enterValueKind("paddingTop");
+    case "layout.padding.paddingLeft":
+      return enterValueKind("paddingLeft");
+    case "layout.padding.paddingRight":
+      return enterValueKind("paddingRight");
+    case "layout.padding.paddingBottom":
+      return enterValueKind("paddingBottom");
+    case "layout.padding.paddingX":
+      return enterValueKind("paddingX");
+    case "layout.padding.paddingY":
+      return enterValueKind("paddingY");
     default:
       return state;
   }
@@ -172,18 +271,15 @@ function runLayoutBinding(binding: KeyBinding): FigmodeState {
 async function handleKeydown(key: string): Promise<void> {
   if (state.settingsOpen) return;
 
-  if (inValueEntry(state)) {
-    state = handleValueKey(key);
-    syncUi();
-    return;
-  }
-
   const scope = getCurrentScope(state.stack);
   const binding = findBindingForKey(bindings, scope, key);
-  if (!binding) return;
 
-  if (isUniversalAction(binding)) {
+  if (binding && isUniversalAction(binding)) {
     if (binding.id === "any.pop") {
+      if (isAtRoot(state)) {
+        closeFigmode();
+        return;
+      }
       state = popMode(state);
     } else if (binding.id === "any.close") {
       closeFigmode();
@@ -195,27 +291,37 @@ async function handleKeydown(key: string): Promise<void> {
     return;
   }
 
+  if (inValueEntry(state)) {
+    state = handleValueKey(key);
+    syncUi();
+    return;
+  }
+
+  if (!binding) return;
+
   state = runLayoutBinding(binding);
   syncUi();
 }
 
 async function initLayoutMode(): Promise<void> {
-  const frame = getTargetFrame();
+  const frame = prepareLayoutTarget();
   if (!frame) {
-    figma.notify("Select a single frame to use Layout mode.");
+    figma.notify("Select one or more objects to use Layout mode.");
     closeFigmode();
     return;
   }
 
-  ensureAutoLayout(frame);
+  setActiveLayoutTarget(frame);
   state = createInitialState();
   bindings = await loadBindings();
 
-  const pos = hudPosition();
+  const uiSpec = buildUiSpec(state, bindings);
+  hudWidth = uiSpec.width;
+  hudHeight = uiSpec.height;
   figma.showUI(__html__, {
-    width: UI_WIDTH,
-    height: UI_HEIGHT,
-    position: pos,
+    width: uiSpec.width,
+    height: uiSpec.height,
+    position: hudPosition(uiSpec.width, uiSpec.height),
     themeColors: true,
   });
 }
@@ -227,15 +333,21 @@ figma.on("run", async ({ command }: RunEvent) => {
 
 figma.ui.onmessage = async (msg: UiToPluginMessage) => {
   switch (msg.type) {
-    case "ready":
+    case "ready": {
+      const uiSpec = buildUiSpec(state, bindings);
       postToUi({
         type: "init",
         state,
         bindings,
-        availableKeys: getAvailableKeys(state, bindings),
+        uiSpec,
         modeLabel: getModeLabel(state),
         timeoutMs: DEFAULT_TIMEOUT_MS,
+        timeoutEnabled: TIMEOUT_ENABLED,
       });
+      break;
+    }
+    case "ui-resize":
+      syncHudFrame(msg.width, msg.height);
       break;
     case "keydown":
       await handleKeydown(msg.key);
@@ -252,23 +364,11 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
       break;
     case "settings-reset":
       bindings = await resetBindings();
-      postToUi({
-        type: "state",
-        state: { ...state, stack: [...state.stack] },
-        availableKeys: getAvailableKeys(state, bindings),
-        modeLabel: getModeLabel(state),
-        bindings,
-      });
+      syncUi();
       break;
     case "settings-update":
       bindings = await saveBindingOverride(msg.bindingId, msg.key);
-      postToUi({
-        type: "state",
-        state: { ...state, stack: [...state.stack] },
-        availableKeys: getAvailableKeys(state, bindings),
-        modeLabel: getModeLabel(state),
-        bindings,
-      });
+      syncUi();
       break;
     default:
       break;

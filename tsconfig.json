@@ -3,9 +3,8 @@
     "target": "es2020",
     "lib": ["es2020"],
     "strict": true,
-    "typeRoots": [
-      "./node_modules/@types",
-      "./node_modules/@figma"
-    ]
-  }
+    "noEmit": true,
+    "typeRoots": ["./node_modules/@types", "./node_modules/@figma"]
+  },
+  "include": ["code.ts", "src/**/*.ts"]
 }

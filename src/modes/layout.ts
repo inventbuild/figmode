@@ -81,6 +81,10 @@ export function setAlignment(frame: LayoutTarget, key: string): void {
   frame.counterAxisAlignItems = counter;
 }
 
+export function isAbsoluteGap(frame: LayoutTarget): boolean {
+  return frame.primaryAxisAlignItems !== "SPACE_BETWEEN";
+}
+
 export function toggleAutoGap(frame: LayoutTarget): boolean {
   if (frame.primaryAxisAlignItems === "SPACE_BETWEEN") {
     frame.primaryAxisAlignItems = "MIN";
@@ -120,14 +124,46 @@ export function applyPaddingValue(frame: LayoutTarget, kind: ValueKind, value: n
       frame.paddingTop = value;
       frame.paddingBottom = value;
       break;
+    case "paddingAll":
+      frame.paddingTop = value;
+      frame.paddingRight = value;
+      frame.paddingBottom = value;
+      frame.paddingLeft = value;
+      break;
     default:
       break;
   }
 }
 
-export function applyValue(frame: LayoutTarget, kind: ValueKind, raw: string): boolean {
-  const value = Number.parseInt(raw, 10);
-  if (Number.isNaN(value) || value < 0) return false;
+export function getValueForKind(frame: LayoutTarget, kind: ValueKind): number {
+  switch (kind) {
+    case "gap":
+      return frame.itemSpacing;
+    case "paddingTop":
+      return frame.paddingTop;
+    case "paddingLeft":
+      return frame.paddingLeft;
+    case "paddingRight":
+      return frame.paddingRight;
+    case "paddingBottom":
+      return frame.paddingBottom;
+    case "paddingX":
+      return frame.paddingLeft;
+    case "paddingY":
+      return frame.paddingTop;
+    case "paddingAll":
+      return frame.paddingTop;
+  }
+}
+
+export function applyNumericValue(
+  frame: LayoutTarget,
+  kind: ValueKind,
+  value: number,
+): boolean {
+  if (!Number.isFinite(value) || value < 0) {
+    return false;
+  }
 
   if (kind === "gap") {
     setGap(frame, value);
@@ -136,4 +172,12 @@ export function applyValue(frame: LayoutTarget, kind: ValueKind, raw: string): b
 
   applyPaddingValue(frame, kind, value);
   return true;
+}
+
+export function applyValue(frame: LayoutTarget, kind: ValueKind, raw: string): boolean {
+  const value = Number.parseInt(raw, 10);
+  if (Number.isNaN(value)) {
+    return false;
+  }
+  return applyNumericValue(frame, kind, value);
 }

@@ -1,4 +1,5 @@
 export const DEFAULT_TIMEOUT_MS = 1000;
+export const TIMEOUT_ENABLED = false;
 
 export type RootCommand = "layout";
 
@@ -15,11 +16,12 @@ export type ValueKind =
   | "paddingRight"
   | "paddingBottom"
   | "paddingX"
-  | "paddingY";
+  | "paddingY"
+  | "paddingAll";
 
 export interface ModeStackFrame {
   mode: "layout";
-  submode?: "width" | "height" | "alignment" | "spacing";
+  submode?: "width" | "height" | "alignment" | "spacing" | "padding";
   valueKind?: ValueKind;
 }
 
@@ -36,7 +38,8 @@ export type BindingScope =
   | "layout.width"
   | "layout.height"
   | "layout.alignment"
-  | "layout.spacing";
+  | "layout.spacing"
+  | "layout.padding";
 
 export interface KeyBinding {
   id: string;
@@ -47,6 +50,7 @@ export interface KeyBinding {
 
 export type UiToPluginMessage =
   | { type: "ready" }
+  | { type: "ui-resize"; width: number; height: number }
   | { type: "keydown"; key: string }
   | { type: "timeout" }
   | { type: "close" }
@@ -59,14 +63,15 @@ export type PluginToUiMessage =
       type: "init";
       state: FigmodeState;
       bindings: KeyBinding[];
-      availableKeys: AvailableKey[];
+      uiSpec: UiSpec;
       modeLabel: string;
       timeoutMs: number;
+      timeoutEnabled: boolean;
     }
   | {
       type: "state";
       state: FigmodeState;
-      availableKeys: AvailableKey[];
+      uiSpec: UiSpec;
       modeLabel: string;
       bindings?: KeyBinding[];
     }
@@ -76,4 +81,32 @@ export type PluginToUiMessage =
 export interface AvailableKey {
   key: string;
   label: string;
+}
+
+export type UiLayout =
+  | "twoColumn"
+  | "alignmentGrid"
+  | "paddingGrid"
+  | "list"
+  | "value"
+  | "settings";
+
+export interface UiKeyItem {
+  key: string;
+  label: string;
+  isModePush?: boolean;
+}
+
+export interface UiSpec {
+  layout: UiLayout;
+  breadcrumb: string[];
+  left?: UiKeyItem[];
+  right?: UiKeyItem[];
+  rows?: UiKeyItem[][];
+  columns?: UiKeyItem[][];
+  items?: UiKeyItem[];
+  footer: UiKeyItem[];
+  valueText?: string;
+  width: number;
+  height: number;
 }
