@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Figmode</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, system-ui, sans-serif;
+        font-size: 11px;
+        line-height: 1.35;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 8px 10px;
+        background: var(--figma-color-bg);
+        color: var(--figma-color-text);
+      }
+
+      .hud {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .hud-header {
+        font-weight: 600;
+      }
+
+      .mode-label {
+        color: var(--figma-color-text-secondary);
+        font-weight: 500;
+      }
+
+      .value-buffer {
+        min-height: 14px;
+        color: var(--figma-color-text-brand);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      .keys {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .keys li {
+        display: flex;
+        gap: 8px;
+      }
+
+      .key {
+        min-width: 42px;
+        color: var(--figma-color-text-secondary);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+
+      .error {
+        color: var(--figma-color-text-danger);
+        min-height: 14px;
+      }
+
+      .capture-input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+        width: 0;
+        height: 0;
+      }
+
+      .settings {
+        display: none;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 160px;
+        overflow: auto;
+      }
+
+      .settings.open {
+        display: flex;
+      }
+
+      .settings h2 {
+        margin: 0;
+        font-size: 12px;
+      }
+
+      .binding-row {
+        display: grid;
+        grid-template-columns: 1fr 56px;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .binding-row label {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .binding-row input {
+        width: 100%;
+        font: inherit;
+        padding: 2px 4px;
+        border: 1px solid var(--figma-color-border);
+        border-radius: 4px;
+        background: var(--figma-color-bg);
+        color: var(--figma-color-text);
+      }
+
+      .settings-actions {
+        display: flex;
+        gap: 6px;
+      }
+
+      button {
+        font: inherit;
+        padding: 4px 8px;
+        border: 1px solid var(--figma-color-border);
+        border-radius: 4px;
+        background: var(--figma-color-bg-secondary);
+        color: var(--figma-color-text);
+        cursor: pointer;
+      }
+
+      button.primary {
+        background: var(--figma-color-bg-brand);
+        color: var(--figma-color-text-onbrand);
+        border-color: transparent;
+      }
+
+      .confirm {
+        display: none;
+        gap: 6px;
+        align-items: center;
+      }
+
+      .confirm.open {
+        display: flex;
+      }
+
+      .hud.hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <input
+      id="capture"
+      class="capture-input"
+      autocomplete="off"
+      autocorrect="off"
+      spellcheck="false"
+      aria-label="Figmode keyboard capture"
+    />
+
+    <div id="hud" class="hud">
+      <div class="hud-header">Figmode: <span id="mode-label" class="mode-label">—</span></div>
+      <div id="value-buffer" class="value-buffer"></div>
+      <ul id="keys" class="keys"></ul>
+      <div id="error" class="error"></div>
+    </div>
+
+    <div id="settings" class="settings">
+      <h2>Settings</h2>
+      <div id="binding-list"></div>
+      <div class="settings-actions">
+        <button id="reset-bindings" type="button">Reset to defaults</button>
+        <button id="close-settings" type="button" class="primary">Done</button>
+      </div>
+      <div id="confirm-reset" class="confirm">
+        <span>Reset all key bindings?</span>
+        <button id="confirm-reset-yes" type="button" class="primary">Yes</button>
+        <button id="confirm-reset-no" type="button">No</button>
+      </div>
+    </div>
+
+    <script>
+      const capture = document.getElementById("capture");
+      const hud = document.getElementById("hud");
+      const settings = document.getElementById("settings");
+      const modeLabel = document.getElementById("mode-label");
+      const valueBuffer = document.getElementById("value-buffer");
+      const keysList = document.getElementById("keys");
+      const errorEl = document.getElementById("error");
+      const bindingList = document.getElementById("binding-list");
+      const confirmReset = document.getElementById("confirm-reset");
+
+      let timeoutMs = 1000;
+      let timeoutId = null;
+      let settingsOpen = false;
+      let bindings = [];
+      let recordingBindingId = null;
+
+      function post(message) {
+        parent.postMessage({ pluginMessage: message }, "*");
+      }
+
+      function formatKeyFromEvent(event) {
+        const parts = [];
+        if (event.ctrlKey) parts.push("Ctrl");
+        if (event.altKey) parts.push("Alt");
+        if (event.metaKey) parts.push("Meta");
+        if (event.shiftKey) parts.push("Shift");
+
+        let key = event.key;
+        if (key === " ") key = "Space";
+        if (key.length === 1) {
+          key = event.shiftKey ? key.toUpperCase() : key.toLowerCase();
+        }
+
+        if (!["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
+          parts.push(key);
+        }
+
+        return parts.join("+");
+      }
+
+      function focusCapture() {
+        capture.focus({ preventScroll: true });
+      }
+
+      function clearTimer() {
+        if (timeoutId !== null) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+      }
+
+      function armTimer() {
+        clearTimer();
+        if (settingsOpen) return;
+        timeoutId = setTimeout(() => post({ type: "timeout" }), timeoutMs);
+      }
+
+      function renderKeys(keys) {
+        keysList.replaceChildren();
+        for (const item of keys) {
+          const li = document.createElement("li");
+          const key = document.createElement("span");
+          key.className = "key";
+          key.textContent = item.key;
+          const label = document.createElement("span");
+          label.textContent = item.label;
+          li.append(key, label);
+          keysList.appendChild(li);
+        }
+      }
+
+      function renderBindings() {
+        bindingList.replaceChildren();
+        for (const binding of bindings) {
+          const row = document.createElement("div");
+          row.className = "binding-row";
+
+          const label = document.createElement("label");
+          label.textContent = binding.label;
+          label.title = binding.label;
+
+          const input = document.createElement("input");
+          input.value = binding.key;
+          input.readOnly = true;
+          input.dataset.bindingId = binding.id;
+          input.addEventListener("focus", () => {
+            recordingBindingId = binding.id;
+            input.value = "Press a key…";
+          });
+          input.addEventListener("blur", () => {
+            if (recordingBindingId === binding.id) {
+              recordingBindingId = null;
+              input.value = binding.key;
+            }
+          });
+
+          row.append(label, input);
+          bindingList.appendChild(row);
+        }
+      }
+
+      function applyState(payload) {
+        settingsOpen = payload.state.settingsOpen;
+        modeLabel.textContent = payload.modeLabel;
+        valueBuffer.textContent = payload.state.valueBuffer
+          ? `Value: ${payload.state.valueBuffer}`
+          : "";
+        renderKeys(payload.availableKeys);
+        errorEl.textContent = "";
+
+        if (settingsOpen) {
+          hud.classList.add("hidden");
+          settings.classList.add("open");
+          clearTimer();
+        } else {
+          hud.classList.remove("hidden");
+          settings.classList.remove("open");
+          confirmReset.classList.remove("open");
+          armTimer();
+          focusCapture();
+        }
+      }
+
+      capture.addEventListener("keydown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (recordingBindingId) {
+          event.preventDefault();
+          const key = formatKeyFromEvent(event);
+          if (["Control", "Alt", "Shift", "Meta"].includes(event.key)) return;
+          post({
+            type: "settings-update",
+            bindingId: recordingBindingId,
+            key,
+          });
+          recordingBindingId = null;
+          capture.blur();
+          return;
+        }
+
+        if (settingsOpen) return;
+
+        const key = formatKeyFromEvent(event);
+        if (!key || ["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
+          return;
+        }
+
+        post({ type: "keydown", key });
+        armTimer();
+      });
+
+      document.getElementById("close-settings").onclick = () => {
+        post({ type: "settings-close" });
+        focusCapture();
+      };
+
+      document.getElementById("reset-bindings").onclick = () => {
+        confirmReset.classList.add("open");
+      };
+
+      document.getElementById("confirm-reset-yes").onclick = () => {
+        post({ type: "settings-reset" });
+        confirmReset.classList.remove("open");
+      };
+
+      document.getElementById("confirm-reset-no").onclick = () => {
+        confirmReset.classList.remove("open");
+      };
+
+      window.addEventListener("blur", () => {
+        if (!settingsOpen) {
+          setTimeout(focusCapture, 0);
+        }
+      });
+
+      window.onmessage = (event) => {
+        const msg = event.data.pluginMessage;
+        if (!msg) return;
+
+        switch (msg.type) {
+          case "init":
+            timeoutMs = msg.timeoutMs;
+            bindings = msg.bindings;
+            renderBindings();
+            applyState(msg);
+            focusCapture();
+            break;
+          case "state":
+            bindings = msg.bindings || bindings;
+            if (msg.bindings) renderBindings();
+            applyState(msg);
+            break;
+          case "close":
+            clearTimer();
+            break;
+          case "error":
+            errorEl.textContent = msg.message;
+            armTimer();
+            focusCapture();
+            break;
+          default:
+            break;
+        }
+      };
+
+      post({ type: "ready" });
+      focusCapture();
+    </script>
+  </body>
+</html>

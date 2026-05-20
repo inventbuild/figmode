@@ -1,0 +1,20 @@
+{
+  "name": "Figmode",
+  "id": "1638937084194831846",
+  "api": "1.0.0",
+  "main": "code.js",
+  "capabilities": [],
+  "enableProposedApi": false,
+  "documentAccess": "dynamic-page",
+  "editorType": ["figma"],
+  "ui": "ui.html",
+  "menu": [
+    {
+      "name": "Layout Mode",
+      "command": "layout"
+    }
+  ],
+  "networkAccess": {
+    "allowedDomains": ["none"]
+  }
+}
