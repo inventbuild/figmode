@@ -4,11 +4,11 @@
   "description": "Your Figma Plugin",
   "main": "code.js",
   "scripts": {
-    "build": "esbuild code.ts --bundle --outfile=code.js --format=iife --target=es2017",
-    "typecheck": "tsc -p tsconfig.json",
+    "build": "esbuild code.ts --bundle --outfile=code.js --format=iife --target=es2017 && node scripts/build-ui.mjs",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.ui.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "watch": "esbuild code.ts --bundle --outfile=code.js --format=iife --target=es2017 --watch"
+    "watch": "esbuild code.ts --bundle --outfile=code.js --format=iife --target=es2017 --watch & node scripts/build-ui.mjs --watch"
   },
   "author": "",
   "license": "",
@@ -20,5 +20,8 @@
     "eslint": "^9.39.4",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.1"
+  },
+  "dependencies": {
+    "@motionone/dom": "^10.18.0"
   }
 }

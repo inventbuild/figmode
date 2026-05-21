@@ -32,10 +32,38 @@
         line-height: normal;
       }
 
+      .stack-viewport {
+        overflow: hidden;
+        position: relative;
+        flex: 1;
+        min-height: 128px;
+      }
+
       .panel {
         display: flex;
         flex-direction: column;
         gap: 5px;
+        width: 326px;
+        min-height: 174px;
+      }
+
+      .stack-stage {
+        display: grid;
+        grid-template-columns: 100%;
+      }
+
+      .stack-layer {
+        grid-area: 1 / 1;
+        min-width: 0;
+        background: var(--figma-color-bg, var(--fm-white));
+      }
+
+      .stack-layer.is-front {
+        z-index: 1;
+      }
+
+      .stack-layer.is-back {
+        z-index: 0;
       }
 
       .divider {
@@ -122,7 +150,7 @@
 
       .alignment-grid {
         display: grid;
-        grid-template-columns: repeat(3, max-content);
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         column-gap: 10px;
         row-gap: 5px;
         align-items: center;
@@ -182,14 +210,21 @@
         display: grid;
         grid-template-columns: 1fr 72px;
         gap: 6px;
-        align-items: center;
+        align-items: start;
       }
 
       .binding-row label {
         font-size: 11px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        line-height: 1.3;
+        white-space: normal;
+      }
+
+      .settings-divider {
+        background: var(--fm-gray);
+        height: 1px;
+        border: 0;
+        margin: 4px 0;
+        align-self: stretch;
       }
 
       .binding-row input {
@@ -251,7 +286,14 @@
       aria-label="Figmode keyboard capture"
     />
 
-    <div id="panel" class="panel"></div>
+    <div id="panel" class="panel">
+      <div id="breadcrumb-host"></div>
+      <div id="stack-viewport" class="stack-viewport">
+        <div id="stack-stage" class="stack-stage"></div>
+      </div>
+      <hr class="divider" />
+      <div id="footer-host"></div>
+    </div>
 
     <div id="settings" class="settings">
       <h2>Settings</h2>
@@ -269,316 +311,1144 @@
 
     <div id="error" class="error"></div>
 
-    <script>
-      const capture = document.getElementById("capture");
-      const panel = document.getElementById("panel");
-      const settings = document.getElementById("settings");
-      const errorEl = document.getElementById("error");
-      const bindingList = document.getElementById("binding-list");
-      const confirmReset = document.getElementById("confirm-reset");
+    <script>"use strict";
+(() => {
+  // node_modules/@motionone/utils/dist/array.es.js
+  function addUniqueItem(array, item) {
+    array.indexOf(item) === -1 && array.push(item);
+  }
 
-      let timeoutMs = 1000;
-      let timeoutEnabled = true;
-      let timeoutId = null;
-      let settingsOpen = false;
-      let bindings = [];
-      let recordingBindingId = null;
-      let lastReportedWidth = 0;
-      let lastReportedHeight = 0;
+  // node_modules/@motionone/utils/dist/clamp.es.js
+  var clamp = (min, max, v) => Math.min(Math.max(v, min), max);
 
-      function post(message) {
-        parent.postMessage({ pluginMessage: message }, "*");
+  // node_modules/@motionone/utils/dist/defaults.es.js
+  var defaults = {
+    duration: 0.3,
+    delay: 0,
+    endDelay: 0,
+    repeat: 0,
+    easing: "ease"
+  };
+
+  // node_modules/@motionone/utils/dist/is-number.es.js
+  var isNumber = (value) => typeof value === "number";
+
+  // node_modules/@motionone/utils/dist/is-easing-list.es.js
+  var isEasingList = (easing) => Array.isArray(easing) && !isNumber(easing[0]);
+
+  // node_modules/@motionone/utils/dist/wrap.es.js
+  var wrap = (min, max, v) => {
+    const rangeSize = max - min;
+    return ((v - min) % rangeSize + rangeSize) % rangeSize + min;
+  };
+
+  // node_modules/@motionone/utils/dist/easing.es.js
+  function getEasingForSegment(easing, i) {
+    return isEasingList(easing) ? easing[wrap(0, easing.length, i)] : easing;
+  }
+
+  // node_modules/@motionone/utils/dist/mix.es.js
+  var mix = (min, max, progress2) => -progress2 * min + progress2 * max + min;
+
+  // node_modules/@motionone/utils/dist/noop.es.js
+  var noop = () => {
+  };
+  var noopReturn = (v) => v;
+
+  // node_modules/@motionone/utils/dist/progress.es.js
+  var progress = (min, max, value) => max - min === 0 ? 1 : (value - min) / (max - min);
+
+  // node_modules/@motionone/utils/dist/offset.es.js
+  function fillOffset(offset, remaining) {
+    const min = offset[offset.length - 1];
+    for (let i = 1; i <= remaining; i++) {
+      const offsetProgress = progress(0, remaining, i);
+      offset.push(mix(min, 1, offsetProgress));
+    }
+  }
+  function defaultOffset(length) {
+    const offset = [0];
+    fillOffset(offset, length - 1);
+    return offset;
+  }
+
+  // node_modules/@motionone/utils/dist/interpolate.es.js
+  function interpolate(output, input = defaultOffset(output.length), easing = noopReturn) {
+    const length = output.length;
+    const remainder = length - input.length;
+    remainder > 0 && fillOffset(input, remainder);
+    return (t) => {
+      let i = 0;
+      for (; i < length - 2; i++) {
+        if (t < input[i + 1])
+          break;
       }
+      let progressInRange = clamp(0, 1, progress(input[i], input[i + 1], t));
+      const segmentEasing = getEasingForSegment(easing, i);
+      progressInRange = segmentEasing(progressInRange);
+      return mix(output[i], output[i + 1], progressInRange);
+    };
+  }
 
-      const BODY_PADDING = 14;
+  // node_modules/@motionone/utils/dist/is-cubic-bezier.es.js
+  var isCubicBezier = (easing) => Array.isArray(easing) && isNumber(easing[0]);
 
-      function reportSize() {
-        requestAnimationFrame(() => {
-          const content = settingsOpen ? settings : panel;
-          const width = Math.ceil(Math.max(content.scrollWidth, errorEl.scrollWidth) + BODY_PADDING);
-          const height = Math.ceil(
-            (settingsOpen ? settings.offsetHeight : panel.offsetHeight) +
-              errorEl.offsetHeight +
-              BODY_PADDING,
-          );
-          if (width <= 0 || height <= 0) {
-            return;
-          }
-          if (width === lastReportedWidth && height === lastReportedHeight) {
-            return;
-          }
-          lastReportedWidth = width;
-          lastReportedHeight = height;
-          post({ type: "ui-resize", width, height });
-        });
+  // node_modules/@motionone/utils/dist/is-easing-generator.es.js
+  var isEasingGenerator = (easing) => typeof easing === "object" && Boolean(easing.createAnimation);
+
+  // node_modules/@motionone/utils/dist/is-function.es.js
+  var isFunction = (value) => typeof value === "function";
+
+  // node_modules/@motionone/utils/dist/is-string.es.js
+  var isString = (value) => typeof value === "string";
+
+  // node_modules/@motionone/utils/dist/time.es.js
+  var time = {
+    ms: (seconds) => seconds * 1e3,
+    s: (milliseconds) => milliseconds / 1e3
+  };
+
+  // node_modules/@motionone/easing/dist/cubic-bezier.es.js
+  var calcBezier = (t, a1, a2) => (((1 - 3 * a2 + 3 * a1) * t + (3 * a2 - 6 * a1)) * t + 3 * a1) * t;
+  var subdivisionPrecision = 1e-7;
+  var subdivisionMaxIterations = 12;
+  function binarySubdivide(x, lowerBound, upperBound, mX1, mX2) {
+    let currentX;
+    let currentT;
+    let i = 0;
+    do {
+      currentT = lowerBound + (upperBound - lowerBound) / 2;
+      currentX = calcBezier(currentT, mX1, mX2) - x;
+      if (currentX > 0) {
+        upperBound = currentT;
+      } else {
+        lowerBound = currentT;
       }
+    } while (Math.abs(currentX) > subdivisionPrecision && ++i < subdivisionMaxIterations);
+    return currentT;
+  }
+  function cubicBezier(mX1, mY1, mX2, mY2) {
+    if (mX1 === mY1 && mX2 === mY2)
+      return noopReturn;
+    const getTForX = (aX) => binarySubdivide(aX, 0, 1, mX1, mX2);
+    return (t) => t === 0 || t === 1 ? t : calcBezier(getTForX(t), mY1, mY2);
+  }
 
-      function formatKeyFromEvent(event) {
-        const parts = [];
-        if (event.ctrlKey) parts.push("Ctrl");
-        if (event.altKey) parts.push("Alt");
-        if (event.metaKey) parts.push("Meta");
-        if (event.shiftKey) parts.push("Shift");
+  // node_modules/@motionone/easing/dist/steps.es.js
+  var steps = (steps2, direction = "end") => (progress2) => {
+    progress2 = direction === "end" ? Math.min(progress2, 0.999) : Math.max(progress2, 1e-3);
+    const expanded = progress2 * steps2;
+    const rounded = direction === "end" ? Math.floor(expanded) : Math.ceil(expanded);
+    return clamp(0, 1, rounded / steps2);
+  };
 
-        let key = event.key;
-        if (key === " ") key = "Space";
-        if (key.length === 1) {
-          key = key.toLowerCase();
-        }
-
-        if (!["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
-          parts.push(key);
-        }
-
-        return parts.join("+");
+  // node_modules/@motionone/animation/dist/utils/easing.es.js
+  var namedEasings = {
+    ease: cubicBezier(0.25, 0.1, 0.25, 1),
+    "ease-in": cubicBezier(0.42, 0, 1, 1),
+    "ease-in-out": cubicBezier(0.42, 0, 0.58, 1),
+    "ease-out": cubicBezier(0, 0, 0.58, 1)
+  };
+  var functionArgsRegex = /\((.*?)\)/;
+  function getEasingFunction(definition) {
+    if (isFunction(definition))
+      return definition;
+    if (isCubicBezier(definition))
+      return cubicBezier(...definition);
+    const namedEasing = namedEasings[definition];
+    if (namedEasing)
+      return namedEasing;
+    if (definition.startsWith("steps")) {
+      const args = functionArgsRegex.exec(definition);
+      if (args) {
+        const argsArray = args[1].split(",");
+        return steps(parseFloat(argsArray[0]), argsArray[1].trim());
       }
+    }
+    return noopReturn;
+  }
 
-      function focusCapture() {
-        capture.focus({ preventScroll: true });
-      }
-
-      function clearTimer() {
-        if (timeoutId !== null) {
-          clearTimeout(timeoutId);
-          timeoutId = null;
-        }
-      }
-
-      function armTimer() {
-        clearTimer();
-        if (!timeoutEnabled || settingsOpen) return;
-        timeoutId = setTimeout(() => post({ type: "timeout" }), timeoutMs);
-      }
-
-      function el(tag, className, text) {
-        const node = document.createElement(tag);
-        if (className) node.className = className;
-        if (text !== undefined) node.textContent = text;
-        return node;
-      }
-
-      function renderKeyRow(item) {
-        const row = el("div", "key-row");
-        row.appendChild(el("span", "key-pill", item.key));
-        const label = el("span", item.isModePush ? "key-label mode-push" : "key-label");
-        if (item.isModePush) {
-          label.textContent = "→ " + item.label;
-        } else {
-          label.textContent = item.label;
-        }
-        row.appendChild(label);
-        return row;
-      }
-
-      function renderBreadcrumb(crumbs) {
-        const wrap = el("div", "breadcrumb");
-        crumbs.forEach((crumb, index) => {
-          if (index > 0) {
-            wrap.appendChild(el("span", "breadcrumb-sep"));
-          }
-          wrap.appendChild(el("span", null, crumb));
-        });
-        return wrap;
-      }
-
-      function renderFooter(footer) {
-        const wrap = el("div", "footer");
-        footer.forEach((item) => wrap.appendChild(renderKeyRow(item)));
-        return wrap;
-      }
-
-      function renderUiSpec(uiSpec) {
-        panel.replaceChildren();
-
-        if (uiSpec.breadcrumb?.length) {
-          panel.appendChild(renderBreadcrumb(uiSpec.breadcrumb));
-        }
-
-        if (uiSpec.layout === "twoColumn") {
-          const cols = el("div", "columns-two");
-          const left = el("div", "column");
-          const right = el("div", "column");
-          (uiSpec.left || []).forEach((item) => left.appendChild(renderKeyRow(item)));
-          (uiSpec.right || []).forEach((item) => right.appendChild(renderKeyRow(item)));
-          cols.append(left, right);
-          panel.appendChild(cols);
-        } else if (uiSpec.layout === "alignmentGrid") {
-          const grid = el("div", "alignment-grid");
-          (uiSpec.rows || []).forEach((row) => {
-            row.forEach((item) => grid.appendChild(renderKeyRow(item)));
-          });
-          panel.appendChild(grid);
-        } else if (uiSpec.layout === "paddingGrid") {
-          const cols = el("div", "columns-grid");
-          (uiSpec.columns || []).forEach((column) => {
-            const col = el("div", "column");
-            column.forEach((item) => col.appendChild(renderKeyRow(item)));
-            cols.appendChild(col);
-          });
-          panel.appendChild(cols);
-        } else if (uiSpec.layout === "value") {
-          const value = el("div", "value-display");
-          value.textContent = uiSpec.valueText ?? "";
-          panel.appendChild(value);
-          const list = el("div", "list");
-          (uiSpec.items || []).forEach((item) => list.appendChild(renderKeyRow(item)));
-          panel.appendChild(list);
-        } else if (uiSpec.items?.length) {
-          const list = el("div", "list");
-          uiSpec.items.forEach((item) => list.appendChild(renderKeyRow(item)));
-          panel.appendChild(list);
-        }
-
-        panel.appendChild(el("hr", "divider"));
-        panel.appendChild(renderFooter(uiSpec.footer || []));
-        reportSize();
-      }
-
-      function renderBindings() {
-        bindingList.replaceChildren();
-        for (const binding of bindings) {
-          const row = document.createElement("div");
-          row.className = "binding-row";
-
-          const label = document.createElement("label");
-          label.textContent = binding.label;
-          label.title = binding.label;
-
-          const input = document.createElement("input");
-          input.value = binding.key;
-          input.readOnly = true;
-          input.dataset.bindingId = binding.id;
-          input.addEventListener("focus", () => {
-            recordingBindingId = binding.id;
-            input.value = "Press a key…";
-          });
-          input.addEventListener("blur", () => {
-            if (recordingBindingId === binding.id) {
-              recordingBindingId = null;
-              input.value = binding.key;
-            }
-          });
-
-          row.append(label, input);
-          bindingList.appendChild(row);
-        }
-        reportSize();
-      }
-
-      function applyState(payload) {
-        lastReportedWidth = 0;
-        lastReportedHeight = 0;
-        settingsOpen = payload.state.settingsOpen;
-        errorEl.textContent = "";
-
-        if (payload.uiSpec) {
-          renderUiSpec(payload.uiSpec);
-        }
-
-        if (settingsOpen) {
-          panel.classList.add("hidden");
-          settings.classList.add("open");
-          clearTimer();
-        } else {
-          panel.classList.remove("hidden");
-          settings.classList.remove("open");
-          confirmReset.classList.remove("open");
-          armTimer();
-          focusCapture();
-        }
-        reportSize();
-      }
-
-      capture.addEventListener("keydown", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-
-        if (recordingBindingId) {
-          const key = formatKeyFromEvent(event);
-          if (["Control", "Alt", "Shift", "Meta"].includes(event.key)) return;
-          post({
-            type: "settings-update",
-            bindingId: recordingBindingId,
-            key,
-          });
-          recordingBindingId = null;
-          capture.blur();
-          return;
-        }
-
-        if (settingsOpen) return;
-
-        const key = formatKeyFromEvent(event);
-        if (!key || ["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
-          return;
-        }
-
-        post({ type: "keydown", key });
-        armTimer();
+  // node_modules/@motionone/animation/dist/Animation.es.js
+  var Animation = class {
+    constructor(output, keyframes = [0, 1], { easing, duration: initialDuration = defaults.duration, delay = defaults.delay, endDelay = defaults.endDelay, repeat = defaults.repeat, offset, direction = "normal", autoplay = true } = {}) {
+      this.startTime = null;
+      this.rate = 1;
+      this.t = 0;
+      this.cancelTimestamp = null;
+      this.easing = noopReturn;
+      this.duration = 0;
+      this.totalDuration = 0;
+      this.repeat = 0;
+      this.playState = "idle";
+      this.finished = new Promise((resolve, reject) => {
+        this.resolve = resolve;
+        this.reject = reject;
       });
-
-      document.getElementById("close-settings").onclick = () => {
-        post({ type: "settings-close" });
-        focusCapture();
-      };
-
-      document.getElementById("reset-bindings").onclick = () => {
-        confirmReset.classList.add("open");
-      };
-
-      document.getElementById("confirm-reset-yes").onclick = () => {
-        post({ type: "settings-reset" });
-        confirmReset.classList.remove("open");
-      };
-
-      document.getElementById("confirm-reset-no").onclick = () => {
-        confirmReset.classList.remove("open");
-      };
-
-      window.addEventListener("blur", () => {
-        window.setTimeout(() => {
-          if (!document.hasFocus()) {
-            post({ type: "close" });
-          }
-        }, 0);
-      });
-
-      window.onmessage = (event) => {
-        const msg = event.data.pluginMessage;
-        if (!msg) return;
-
-        switch (msg.type) {
-          case "init":
-            timeoutMs = msg.timeoutMs;
-            timeoutEnabled = msg.timeoutEnabled;
-            bindings = msg.bindings;
-            renderBindings();
-            applyState(msg);
-            focusCapture();
-            break;
-          case "state":
-            if (msg.bindings) {
-              bindings = msg.bindings;
-              renderBindings();
-            }
-            applyState(msg);
-            break;
-          case "close":
-            clearTimer();
-            break;
-          case "error":
-            errorEl.textContent = msg.message;
-            armTimer();
-            focusCapture();
-            reportSize();
-            break;
-          default:
-            break;
+      easing = easing || defaults.easing;
+      if (isEasingGenerator(easing)) {
+        const custom = easing.createAnimation(keyframes);
+        easing = custom.easing;
+        keyframes = custom.keyframes || keyframes;
+        initialDuration = custom.duration || initialDuration;
+      }
+      this.repeat = repeat;
+      this.easing = isEasingList(easing) ? noopReturn : getEasingFunction(easing);
+      this.updateDuration(initialDuration);
+      const interpolate$1 = interpolate(keyframes, offset, isEasingList(easing) ? easing.map(getEasingFunction) : noopReturn);
+      this.tick = (timestamp) => {
+        var _a;
+        delay = delay;
+        let t = 0;
+        if (this.pauseTime !== void 0) {
+          t = this.pauseTime;
+        } else {
+          t = (timestamp - this.startTime) * this.rate;
+        }
+        this.t = t;
+        t /= 1e3;
+        t = Math.max(t - delay, 0);
+        if (this.playState === "finished" && this.pauseTime === void 0) {
+          t = this.totalDuration;
+        }
+        const progress2 = t / this.duration;
+        let currentIteration = Math.floor(progress2);
+        let iterationProgress = progress2 % 1;
+        if (!iterationProgress && progress2 >= 1) {
+          iterationProgress = 1;
+        }
+        iterationProgress === 1 && currentIteration--;
+        const iterationIsOdd = currentIteration % 2;
+        if (direction === "reverse" || direction === "alternate" && iterationIsOdd || direction === "alternate-reverse" && !iterationIsOdd) {
+          iterationProgress = 1 - iterationProgress;
+        }
+        const p = t >= this.totalDuration ? 1 : Math.min(iterationProgress, 1);
+        const latest = interpolate$1(this.easing(p));
+        output(latest);
+        const isAnimationFinished = this.pauseTime === void 0 && (this.playState === "finished" || t >= this.totalDuration + endDelay);
+        if (isAnimationFinished) {
+          this.playState = "finished";
+          (_a = this.resolve) === null || _a === void 0 ? void 0 : _a.call(this, latest);
+        } else if (this.playState !== "idle") {
+          this.frameRequestId = requestAnimationFrame(this.tick);
         }
       };
+      if (autoplay)
+        this.play();
+    }
+    play() {
+      const now = performance.now();
+      this.playState = "running";
+      if (this.pauseTime !== void 0) {
+        this.startTime = now - this.pauseTime;
+      } else if (!this.startTime) {
+        this.startTime = now;
+      }
+      this.cancelTimestamp = this.startTime;
+      this.pauseTime = void 0;
+      this.frameRequestId = requestAnimationFrame(this.tick);
+    }
+    pause() {
+      this.playState = "paused";
+      this.pauseTime = this.t;
+    }
+    finish() {
+      this.playState = "finished";
+      this.tick(0);
+    }
+    stop() {
+      var _a;
+      this.playState = "idle";
+      if (this.frameRequestId !== void 0) {
+        cancelAnimationFrame(this.frameRequestId);
+      }
+      (_a = this.reject) === null || _a === void 0 ? void 0 : _a.call(this, false);
+    }
+    cancel() {
+      this.stop();
+      this.tick(this.cancelTimestamp);
+    }
+    reverse() {
+      this.rate *= -1;
+    }
+    commitStyles() {
+    }
+    updateDuration(duration) {
+      this.duration = duration;
+      this.totalDuration = duration * (this.repeat + 1);
+    }
+    get currentTime() {
+      return this.t;
+    }
+    set currentTime(t) {
+      if (this.pauseTime !== void 0 || this.rate === 0) {
+        this.pauseTime = t;
+      } else {
+        this.startTime = performance.now() - t / this.rate;
+      }
+    }
+    get playbackRate() {
+      return this.rate;
+    }
+    set playbackRate(rate) {
+      this.rate = rate;
+    }
+  };
 
-      post({ type: "ready" });
+  // node_modules/hey-listen/dist/hey-listen.es.js
+  var warning = function() {
+  };
+  var invariant = function() {
+  };
+  if (true) {
+    warning = function(check, message) {
+      if (!check && typeof console !== "undefined") {
+        console.warn(message);
+      }
+    };
+    invariant = function(check, message) {
+      if (!check) {
+        throw new Error(message);
+      }
+    };
+  }
+
+  // node_modules/@motionone/types/dist/MotionValue.es.js
+  var MotionValue = class {
+    setAnimation(animation) {
+      this.animation = animation;
+      animation === null || animation === void 0 ? void 0 : animation.finished.then(() => this.clearAnimation()).catch(() => {
+      });
+    }
+    clearAnimation() {
+      this.animation = this.generator = void 0;
+    }
+  };
+
+  // node_modules/@motionone/dom/dist/animate/data.es.js
+  var data = /* @__PURE__ */ new WeakMap();
+  function getAnimationData(element) {
+    if (!data.has(element)) {
+      data.set(element, {
+        transforms: [],
+        values: /* @__PURE__ */ new Map()
+      });
+    }
+    return data.get(element);
+  }
+  function getMotionValue(motionValues, name) {
+    if (!motionValues.has(name)) {
+      motionValues.set(name, new MotionValue());
+    }
+    return motionValues.get(name);
+  }
+
+  // node_modules/@motionone/dom/dist/animate/utils/transforms.es.js
+  var axes = ["", "X", "Y", "Z"];
+  var order = ["translate", "scale", "rotate", "skew"];
+  var transformAlias = {
+    x: "translateX",
+    y: "translateY",
+    z: "translateZ"
+  };
+  var rotation = {
+    syntax: "<angle>",
+    initialValue: "0deg",
+    toDefaultUnit: (v) => v + "deg"
+  };
+  var baseTransformProperties = {
+    translate: {
+      syntax: "<length-percentage>",
+      initialValue: "0px",
+      toDefaultUnit: (v) => v + "px"
+    },
+    rotate: rotation,
+    scale: {
+      syntax: "<number>",
+      initialValue: 1,
+      toDefaultUnit: noopReturn
+    },
+    skew: rotation
+  };
+  var transformDefinitions = /* @__PURE__ */ new Map();
+  var asTransformCssVar = (name) => `--motion-${name}`;
+  var transforms = ["x", "y", "z"];
+  order.forEach((name) => {
+    axes.forEach((axis) => {
+      transforms.push(name + axis);
+      transformDefinitions.set(asTransformCssVar(name + axis), baseTransformProperties[name]);
+    });
+  });
+  var compareTransformOrder = (a, b) => transforms.indexOf(a) - transforms.indexOf(b);
+  var transformLookup = new Set(transforms);
+  var isTransform = (name) => transformLookup.has(name);
+  var addTransformToElement = (element, name) => {
+    if (transformAlias[name])
+      name = transformAlias[name];
+    const { transforms: transforms2 } = getAnimationData(element);
+    addUniqueItem(transforms2, name);
+    element.style.transform = buildTransformTemplate(transforms2);
+  };
+  var buildTransformTemplate = (transforms2) => transforms2.sort(compareTransformOrder).reduce(transformListToString, "").trim();
+  var transformListToString = (template, name) => `${template} ${name}(var(${asTransformCssVar(name)}))`;
+
+  // node_modules/@motionone/dom/dist/animate/utils/css-var.es.js
+  var isCssVar = (name) => name.startsWith("--");
+  var registeredProperties = /* @__PURE__ */ new Set();
+  function registerCssVariable(name) {
+    if (registeredProperties.has(name))
+      return;
+    registeredProperties.add(name);
+    try {
+      const { syntax, initialValue } = transformDefinitions.has(name) ? transformDefinitions.get(name) : {};
+      CSS.registerProperty({
+        name,
+        inherits: false,
+        syntax,
+        initialValue
+      });
+    } catch (e) {
+    }
+  }
+
+  // node_modules/@motionone/dom/dist/animate/utils/feature-detection.es.js
+  var testAnimation = (keyframes, options) => document.createElement("div").animate(keyframes, options);
+  var featureTests = {
+    cssRegisterProperty: () => typeof CSS !== "undefined" && Object.hasOwnProperty.call(CSS, "registerProperty"),
+    waapi: () => Object.hasOwnProperty.call(Element.prototype, "animate"),
+    partialKeyframes: () => {
+      try {
+        testAnimation({ opacity: [1] });
+      } catch (e) {
+        return false;
+      }
+      return true;
+    },
+    finished: () => Boolean(testAnimation({ opacity: [0, 1] }, { duration: 1e-3 }).finished),
+    linearEasing: () => {
+      try {
+        testAnimation({ opacity: 0 }, { easing: "linear(0, 1)" });
+      } catch (e) {
+        return false;
+      }
+      return true;
+    }
+  };
+  var results = {};
+  var supports = {};
+  for (const key in featureTests) {
+    supports[key] = () => {
+      if (results[key] === void 0)
+        results[key] = featureTests[key]();
+      return results[key];
+    };
+  }
+
+  // node_modules/@motionone/dom/dist/animate/utils/easing.es.js
+  var resolution = 0.015;
+  var generateLinearEasingPoints = (easing, duration) => {
+    let points = "";
+    const numPoints = Math.round(duration / resolution);
+    for (let i = 0; i < numPoints; i++) {
+      points += easing(progress(0, numPoints - 1, i)) + ", ";
+    }
+    return points.substring(0, points.length - 2);
+  };
+  var convertEasing = (easing, duration) => {
+    if (isFunction(easing)) {
+      return supports.linearEasing() ? `linear(${generateLinearEasingPoints(easing, duration)})` : defaults.easing;
+    } else {
+      return isCubicBezier(easing) ? cubicBezierAsString(easing) : easing;
+    }
+  };
+  var cubicBezierAsString = ([a, b, c, d]) => `cubic-bezier(${a}, ${b}, ${c}, ${d})`;
+
+  // node_modules/@motionone/dom/dist/animate/utils/keyframes.es.js
+  function hydrateKeyframes(keyframes, readInitialValue) {
+    for (let i = 0; i < keyframes.length; i++) {
+      if (keyframes[i] === null) {
+        keyframes[i] = i ? keyframes[i - 1] : readInitialValue();
+      }
+    }
+    return keyframes;
+  }
+  var keyframesList = (keyframes) => Array.isArray(keyframes) ? keyframes : [keyframes];
+
+  // node_modules/@motionone/dom/dist/animate/utils/get-style-name.es.js
+  function getStyleName(key) {
+    if (transformAlias[key])
+      key = transformAlias[key];
+    return isTransform(key) ? asTransformCssVar(key) : key;
+  }
+
+  // node_modules/@motionone/dom/dist/animate/style.es.js
+  var style = {
+    get: (element, name) => {
+      name = getStyleName(name);
+      let value = isCssVar(name) ? element.style.getPropertyValue(name) : getComputedStyle(element)[name];
+      if (!value && value !== 0) {
+        const definition = transformDefinitions.get(name);
+        if (definition)
+          value = definition.initialValue;
+      }
+      return value;
+    },
+    set: (element, name, value) => {
+      name = getStyleName(name);
+      if (isCssVar(name)) {
+        element.style.setProperty(name, value);
+      } else {
+        element.style[name] = value;
+      }
+    }
+  };
+
+  // node_modules/@motionone/dom/dist/animate/utils/stop-animation.es.js
+  function stopAnimation(animation, needsCommit = true) {
+    if (!animation || animation.playState === "finished")
+      return;
+    try {
+      if (animation.stop) {
+        animation.stop();
+      } else {
+        needsCommit && animation.commitStyles();
+        animation.cancel();
+      }
+    } catch (e) {
+    }
+  }
+
+  // node_modules/@motionone/dom/dist/animate/utils/get-unit.es.js
+  function getUnitConverter(keyframes, definition) {
+    var _a;
+    let toUnit = (definition === null || definition === void 0 ? void 0 : definition.toDefaultUnit) || noopReturn;
+    const finalKeyframe = keyframes[keyframes.length - 1];
+    if (isString(finalKeyframe)) {
+      const unit = ((_a = finalKeyframe.match(/(-?[\d.]+)([a-z%]*)/)) === null || _a === void 0 ? void 0 : _a[2]) || "";
+      if (unit)
+        toUnit = (value) => value + unit;
+    }
+    return toUnit;
+  }
+
+  // node_modules/@motionone/dom/dist/animate/animate-style.es.js
+  function getDevToolsRecord() {
+    return window.__MOTION_DEV_TOOLS_RECORD;
+  }
+  function animateStyle(element, key, keyframesDefinition, options = {}, AnimationPolyfill) {
+    const record = getDevToolsRecord();
+    const isRecording = options.record !== false && record;
+    let animation;
+    let { duration = defaults.duration, delay = defaults.delay, endDelay = defaults.endDelay, repeat = defaults.repeat, easing = defaults.easing, persist = false, direction, offset, allowWebkitAcceleration = false, autoplay = true } = options;
+    const data2 = getAnimationData(element);
+    const valueIsTransform = isTransform(key);
+    let canAnimateNatively = supports.waapi();
+    valueIsTransform && addTransformToElement(element, key);
+    const name = getStyleName(key);
+    const motionValue = getMotionValue(data2.values, name);
+    const definition = transformDefinitions.get(name);
+    stopAnimation(motionValue.animation, !(isEasingGenerator(easing) && motionValue.generator) && options.record !== false);
+    return () => {
+      const readInitialValue = () => {
+        var _a, _b;
+        return (_b = (_a = style.get(element, name)) !== null && _a !== void 0 ? _a : definition === null || definition === void 0 ? void 0 : definition.initialValue) !== null && _b !== void 0 ? _b : 0;
+      };
+      let keyframes = hydrateKeyframes(keyframesList(keyframesDefinition), readInitialValue);
+      const toUnit = getUnitConverter(keyframes, definition);
+      if (isEasingGenerator(easing)) {
+        const custom = easing.createAnimation(keyframes, key !== "opacity", readInitialValue, name, motionValue);
+        easing = custom.easing;
+        keyframes = custom.keyframes || keyframes;
+        duration = custom.duration || duration;
+      }
+      if (isCssVar(name)) {
+        if (supports.cssRegisterProperty()) {
+          registerCssVariable(name);
+        } else {
+          canAnimateNatively = false;
+        }
+      }
+      if (valueIsTransform && !supports.linearEasing() && (isFunction(easing) || isEasingList(easing) && easing.some(isFunction))) {
+        canAnimateNatively = false;
+      }
+      if (canAnimateNatively) {
+        if (definition) {
+          keyframes = keyframes.map((value) => isNumber(value) ? definition.toDefaultUnit(value) : value);
+        }
+        if (keyframes.length === 1 && (!supports.partialKeyframes() || isRecording)) {
+          keyframes.unshift(readInitialValue());
+        }
+        const animationOptions = {
+          delay: time.ms(delay),
+          duration: time.ms(duration),
+          endDelay: time.ms(endDelay),
+          easing: !isEasingList(easing) ? convertEasing(easing, duration) : void 0,
+          direction,
+          iterations: repeat + 1,
+          fill: "both"
+        };
+        animation = element.animate({
+          [name]: keyframes,
+          offset,
+          easing: isEasingList(easing) ? easing.map((thisEasing) => convertEasing(thisEasing, duration)) : void 0
+        }, animationOptions);
+        if (!animation.finished) {
+          animation.finished = new Promise((resolve, reject) => {
+            animation.onfinish = resolve;
+            animation.oncancel = reject;
+          });
+        }
+        const target = keyframes[keyframes.length - 1];
+        animation.finished.then(() => {
+          if (persist)
+            return;
+          style.set(element, name, target);
+          animation.cancel();
+        }).catch(noop);
+        if (!allowWebkitAcceleration)
+          animation.playbackRate = 1.000001;
+      } else if (AnimationPolyfill && valueIsTransform) {
+        keyframes = keyframes.map((value) => typeof value === "string" ? parseFloat(value) : value);
+        if (keyframes.length === 1) {
+          keyframes.unshift(parseFloat(readInitialValue()));
+        }
+        animation = new AnimationPolyfill((latest) => {
+          style.set(element, name, toUnit ? toUnit(latest) : latest);
+        }, keyframes, Object.assign(Object.assign({}, options), {
+          duration,
+          easing
+        }));
+      } else {
+        const target = keyframes[keyframes.length - 1];
+        style.set(element, name, definition && isNumber(target) ? definition.toDefaultUnit(target) : target);
+      }
+      if (isRecording) {
+        record(element, key, keyframes, {
+          duration,
+          delay,
+          easing,
+          repeat,
+          offset
+        }, "motion-one");
+      }
+      motionValue.setAnimation(animation);
+      if (animation && !autoplay)
+        animation.pause();
+      return animation;
+    };
+  }
+
+  // node_modules/@motionone/dom/dist/animate/utils/options.es.js
+  var getOptions = (options, key) => (
+    /**
+     * TODO: Make test for this
+     * Always return a new object otherwise delay is overwritten by results of stagger
+     * and this results in no stagger
+     */
+    options[key] ? Object.assign(Object.assign({}, options), options[key]) : Object.assign({}, options)
+  );
+
+  // node_modules/@motionone/dom/dist/utils/resolve-elements.es.js
+  function resolveElements(elements, selectorCache) {
+    var _a;
+    if (typeof elements === "string") {
+      if (selectorCache) {
+        (_a = selectorCache[elements]) !== null && _a !== void 0 ? _a : selectorCache[elements] = document.querySelectorAll(elements);
+        elements = selectorCache[elements];
+      } else {
+        elements = document.querySelectorAll(elements);
+      }
+    } else if (elements instanceof Element) {
+      elements = [elements];
+    }
+    return Array.from(elements || []);
+  }
+
+  // node_modules/@motionone/dom/dist/animate/utils/controls.es.js
+  var createAnimation = (factory) => factory();
+  var withControls = (animationFactory, options, duration = defaults.duration) => {
+    return new Proxy({
+      animations: animationFactory.map(createAnimation).filter(Boolean),
+      duration,
+      options
+    }, controls);
+  };
+  var getActiveAnimation = (state) => state.animations[0];
+  var controls = {
+    get: (target, key) => {
+      const activeAnimation = getActiveAnimation(target);
+      switch (key) {
+        case "duration":
+          return target.duration;
+        case "currentTime":
+          return time.s((activeAnimation === null || activeAnimation === void 0 ? void 0 : activeAnimation[key]) || 0);
+        case "playbackRate":
+        case "playState":
+          return activeAnimation === null || activeAnimation === void 0 ? void 0 : activeAnimation[key];
+        case "finished":
+          if (!target.finished) {
+            target.finished = Promise.all(target.animations.map(selectFinished)).catch(noop);
+          }
+          return target.finished;
+        case "stop":
+          return () => {
+            target.animations.forEach((animation) => stopAnimation(animation));
+          };
+        case "forEachNative":
+          return (callback) => {
+            target.animations.forEach((animation) => callback(animation, target));
+          };
+        default:
+          return typeof (activeAnimation === null || activeAnimation === void 0 ? void 0 : activeAnimation[key]) === "undefined" ? void 0 : () => target.animations.forEach((animation) => animation[key]());
+      }
+    },
+    set: (target, key, value) => {
+      switch (key) {
+        case "currentTime":
+          value = time.ms(value);
+        // Fall-through
+        case "playbackRate":
+          for (let i = 0; i < target.animations.length; i++) {
+            target.animations[i][key] = value;
+          }
+          return true;
+      }
+      return false;
+    }
+  };
+  var selectFinished = (animation) => animation.finished;
+
+  // node_modules/@motionone/dom/dist/utils/stagger.es.js
+  function resolveOption(option, i, total) {
+    return isFunction(option) ? option(i, total) : option;
+  }
+
+  // node_modules/@motionone/dom/dist/animate/create-animate.es.js
+  function createAnimate(AnimatePolyfill) {
+    return function animate2(elements, keyframes, options = {}) {
+      elements = resolveElements(elements);
+      const numElements = elements.length;
+      invariant(Boolean(numElements), "No valid element provided.");
+      invariant(Boolean(keyframes), "No keyframes defined.");
+      const animationFactories = [];
+      for (let i = 0; i < numElements; i++) {
+        const element = elements[i];
+        for (const key in keyframes) {
+          const valueOptions = getOptions(options, key);
+          valueOptions.delay = resolveOption(valueOptions.delay, i, numElements);
+          const animation = animateStyle(element, key, keyframes[key], valueOptions, AnimatePolyfill);
+          animationFactories.push(animation);
+        }
+      }
+      return withControls(
+        animationFactories,
+        options,
+        /**
+         * TODO:
+         * If easing is set to spring or glide, duration will be dynamically
+         * generated. Ideally we would dynamically generate this from
+         * animation.effect.getComputedTiming().duration but this isn't
+         * supported in iOS13 or our number polyfill. Perhaps it's possible
+         * to Proxy animations returned from animateStyle that has duration
+         * as a getter.
+         */
+        options.duration
+      );
+    };
+  }
+
+  // node_modules/@motionone/dom/dist/animate/index.es.js
+  var animate = createAnimate(Animation);
+
+  // src/binding-scope.ts
+  var BINDING_SCOPE_ORDER = [
+    "any",
+    "layout",
+    "layout.width",
+    "layout.height",
+    "layout.alignment",
+    "layout.spacing",
+    "layout.padding"
+  ];
+  function bindingScopePath(scope) {
+    if (scope === "any") {
+      return "Any";
+    }
+    return scope.split(".").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" \u203A ");
+  }
+  function bindingFullPath(scope, label) {
+    return `${bindingScopePath(scope)} \u203A ${label}`;
+  }
+  function groupBindingsByScope(items) {
+    var _a;
+    const grouped = /* @__PURE__ */ new Map();
+    for (const item of items) {
+      const list = (_a = grouped.get(item.scope)) != null ? _a : [];
+      list.push(item);
+      grouped.set(item.scope, list);
+    }
+    return BINDING_SCOPE_ORDER.filter((scope) => grouped.has(scope)).map((scope) => ({
+      scope,
+      items: grouped.get(scope)
+    }));
+  }
+
+  // ui/main.ts
+  var capture = document.getElementById("capture");
+  var panel = document.getElementById("panel");
+  var breadcrumbHost = document.getElementById("breadcrumb-host");
+  var stackViewport = document.getElementById("stack-viewport");
+  var stackStage = document.getElementById("stack-stage");
+  var footerHost = document.getElementById("footer-host");
+  var settings = document.getElementById("settings");
+  var errorEl = document.getElementById("error");
+  var bindingList = document.getElementById("binding-list");
+  var confirmReset = document.getElementById("confirm-reset");
+  var BODY_PADDING = 14;
+  var STACK_DURATION = 0.22;
+  var STACK_EASING = [0.2, 0, 0, 1];
+  var timeoutMs = 1e3;
+  var timeoutEnabled = true;
+  var timeoutId = null;
+  var settingsOpen = false;
+  var bindings = [];
+  var recordingBindingId = null;
+  var lastReportedHeight = 0;
+  var stackAnimating = false;
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function post(message) {
+    parent.postMessage({ pluginMessage: message }, "*");
+  }
+  function measurePanelHeight() {
+    const content = settingsOpen ? settings : panel;
+    return Math.ceil(content.offsetHeight + errorEl.offsetHeight + BODY_PADDING);
+  }
+  function reportSize() {
+    if (!settingsOpen) {
+      return;
+    }
+    requestAnimationFrame(() => {
+      const height = measurePanelHeight();
+      if (height <= 0 || height === lastReportedHeight) {
+        return;
+      }
+      lastReportedHeight = height;
+      post({ type: "ui-resize", height });
+    });
+  }
+  function formatKeyFromEvent(event) {
+    const parts = [];
+    if (event.ctrlKey) parts.push("Ctrl");
+    if (event.altKey) parts.push("Alt");
+    if (event.metaKey) parts.push("Meta");
+    if (event.shiftKey) parts.push("Shift");
+    let key = event.key;
+    if (key === " ") key = "Space";
+    if (key.length === 1) {
+      key = key.toLowerCase();
+    }
+    if (!["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
+      parts.push(key);
+    }
+    return parts.join("+");
+  }
+  function focusCapture() {
+    capture.focus({ preventScroll: true });
+  }
+  function clearTimer() {
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+  }
+  function armTimer() {
+    clearTimer();
+    if (!timeoutEnabled || settingsOpen) return;
+    timeoutId = setTimeout(() => post({ type: "timeout" }), timeoutMs);
+  }
+  function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== void 0) node.textContent = text;
+    return node;
+  }
+  function renderKeyRow(item) {
+    const row = el("div", "key-row");
+    row.appendChild(el("span", "key-pill", item.key));
+    const label = el("span", item.isModePush ? "key-label mode-push" : "key-label");
+    label.textContent = item.isModePush ? `\u2192 ${item.label}` : item.label;
+    row.appendChild(label);
+    return row;
+  }
+  function renderBreadcrumb(crumbs) {
+    const wrap2 = el("div", "breadcrumb");
+    crumbs.forEach((crumb, index) => {
+      if (index > 0) {
+        wrap2.appendChild(el("span", "breadcrumb-sep"));
+      }
+      wrap2.appendChild(el("span", void 0, crumb));
+    });
+    return wrap2;
+  }
+  function renderFooter(footer) {
+    const wrap2 = el("div", "footer");
+    footer.forEach((item) => wrap2.appendChild(renderKeyRow(item)));
+    return wrap2;
+  }
+  function buildContent(uiSpec) {
+    var _a, _b;
+    const content = el("div", "stack-content");
+    if (uiSpec.layout === "twoColumn") {
+      const cols = el("div", "columns-two");
+      const left = el("div", "column");
+      const right = el("div", "column");
+      (uiSpec.left || []).forEach((item) => left.appendChild(renderKeyRow(item)));
+      (uiSpec.right || []).forEach((item) => right.appendChild(renderKeyRow(item)));
+      cols.append(left, right);
+      content.appendChild(cols);
+    } else if (uiSpec.layout === "alignmentGrid") {
+      const grid = el("div", "alignment-grid");
+      (uiSpec.rows || []).forEach((row) => {
+        row.forEach((item) => grid.appendChild(renderKeyRow(item)));
+      });
+      content.appendChild(grid);
+    } else if (uiSpec.layout === "paddingGrid") {
+      const cols = el("div", "columns-grid");
+      (uiSpec.columns || []).forEach((column) => {
+        const col = el("div", "column");
+        column.forEach((item) => col.appendChild(renderKeyRow(item)));
+        cols.appendChild(col);
+      });
+      content.appendChild(cols);
+    } else if (uiSpec.layout === "value") {
+      const value = el("div", "value-display");
+      value.textContent = (_a = uiSpec.valueText) != null ? _a : "";
+      content.appendChild(value);
+      const list = el("div", "list");
+      (uiSpec.items || []).forEach((item) => list.appendChild(renderKeyRow(item)));
+      content.appendChild(list);
+    } else if ((_b = uiSpec.items) == null ? void 0 : _b.length) {
+      const list = el("div", "list");
+      uiSpec.items.forEach((item) => list.appendChild(renderKeyRow(item)));
+      content.appendChild(list);
+    }
+    return content;
+  }
+  function updateChrome(uiSpec) {
+    var _a;
+    breadcrumbHost.replaceChildren();
+    footerHost.replaceChildren();
+    if ((_a = uiSpec.breadcrumb) == null ? void 0 : _a.length) {
+      breadcrumbHost.appendChild(renderBreadcrumb(uiSpec.breadcrumb));
+    }
+    footerHost.appendChild(renderFooter(uiSpec.footer || []));
+  }
+  function mountStackLayer(layer) {
+    layer.classList.add("stack-layer");
+    stackStage.appendChild(layer);
+    return layer;
+  }
+  function resetLayerStyles(layer) {
+    layer.style.transform = "";
+    layer.style.opacity = "";
+  }
+  function finishStackTransition(fromLayer) {
+    if (fromLayer == null ? void 0 : fromLayer.parentNode) {
+      fromLayer.remove();
+    }
+    stackAnimating = false;
+  }
+  async function animateStackTransition(transition, currentLayer, nextLayer) {
+    resetLayerStyles(currentLayer);
+    resetLayerStyles(nextLayer);
+    if (transition === "push") {
+      nextLayer.classList.add("is-front");
+      currentLayer.classList.add("is-back");
+      nextLayer.style.transform = "translateX(100%)";
+      await Promise.all([
+        animate(
+          currentLayer,
+          { transform: ["translateX(0%)", "translateX(-12%)"], opacity: [1, 0] },
+          { duration: STACK_DURATION, easing: STACK_EASING }
+        ).finished,
+        animate(
+          nextLayer,
+          { transform: ["translateX(100%)", "translateX(0%)"] },
+          { duration: STACK_DURATION, easing: STACK_EASING }
+        ).finished
+      ]);
+    } else {
+      currentLayer.classList.add("is-front");
+      nextLayer.classList.add("is-back");
+      nextLayer.style.transform = "translateX(-12%)";
+      await Promise.all([
+        animate(
+          currentLayer,
+          { transform: ["translateX(0%)", "translateX(100%)"] },
+          { duration: STACK_DURATION, easing: STACK_EASING }
+        ).finished,
+        animate(
+          nextLayer,
+          { transform: ["translateX(-12%)", "translateX(0%)"] },
+          { duration: STACK_DURATION, easing: STACK_EASING }
+        ).finished
+      ]);
+    }
+  }
+  function setStackContent(uiSpec, transition) {
+    const currentLayer = stackStage.querySelector(".stack-layer");
+    updateChrome(uiSpec);
+    const nextContent = buildContent(uiSpec);
+    const canAnimate = !reduceMotion && !stackAnimating && currentLayer && (transition === "push" || transition === "pop");
+    if (!canAnimate) {
+      stackStage.replaceChildren();
+      mountStackLayer(nextContent);
+      return;
+    }
+    stackAnimating = true;
+    const nextLayer = mountStackLayer(nextContent);
+    void animateStackTransition(transition, currentLayer, nextLayer).then(() => finishStackTransition(currentLayer)).catch(() => finishStackTransition(currentLayer));
+  }
+  function renderUiSpec(uiSpec, transition) {
+    setStackContent(uiSpec, transition);
+  }
+  function renderBindings() {
+    bindingList.replaceChildren();
+    const groups = groupBindingsByScope(bindings);
+    groups.forEach((group, index) => {
+      if (index > 0) {
+        const divider = document.createElement("hr");
+        divider.className = "settings-divider";
+        bindingList.appendChild(divider);
+      }
+      for (const binding of group.items) {
+        const row = document.createElement("div");
+        row.className = "binding-row";
+        const label = document.createElement("label");
+        const path = bindingFullPath(binding.scope, binding.label);
+        label.textContent = path;
+        label.title = path;
+        const input = document.createElement("input");
+        input.value = binding.key;
+        input.readOnly = true;
+        input.dataset.bindingId = binding.id;
+        input.addEventListener("focus", () => {
+          recordingBindingId = binding.id;
+          input.value = "Press a key\u2026";
+        });
+        input.addEventListener("blur", () => {
+          if (recordingBindingId === binding.id) {
+            recordingBindingId = null;
+            input.value = binding.key;
+          }
+        });
+        row.append(label, input);
+        bindingList.appendChild(row);
+      }
+    });
+    reportSize();
+  }
+  function applyState(payload) {
+    settingsOpen = payload.state.settingsOpen;
+    errorEl.textContent = "";
+    if (payload.uiSpec && !settingsOpen) {
+      renderUiSpec(payload.uiSpec, payload.transition || "none");
+    }
+    if (settingsOpen) {
+      panel.classList.add("hidden");
+      settings.classList.add("open");
+      clearTimer();
+      lastReportedHeight = 0;
+      reportSize();
+    } else {
+      panel.classList.remove("hidden");
+      settings.classList.remove("open");
+      confirmReset.classList.remove("open");
+      armTimer();
       focusCapture();
-    </script>
+      if (payload.transition === "none") {
+        lastReportedHeight = 0;
+        reportSize();
+      }
+    }
+  }
+  capture.addEventListener("keydown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (recordingBindingId) {
+      const key2 = formatKeyFromEvent(event);
+      if (["Control", "Alt", "Shift", "Meta"].includes(event.key)) return;
+      post({
+        type: "settings-update",
+        bindingId: recordingBindingId,
+        key: key2
+      });
+      recordingBindingId = null;
+      capture.blur();
+      return;
+    }
+    if (settingsOpen) return;
+    const key = formatKeyFromEvent(event);
+    if (!key || ["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
+      return;
+    }
+    post({ type: "keydown", key });
+    armTimer();
+  });
+  document.getElementById("close-settings").onclick = () => {
+    post({ type: "settings-close" });
+    focusCapture();
+  };
+  document.getElementById("reset-bindings").onclick = () => {
+    confirmReset.classList.add("open");
+  };
+  document.getElementById("confirm-reset-yes").onclick = () => {
+    post({ type: "settings-reset" });
+    confirmReset.classList.remove("open");
+  };
+  document.getElementById("confirm-reset-no").onclick = () => {
+    confirmReset.classList.remove("open");
+  };
+  window.addEventListener("blur", () => {
+    window.setTimeout(() => {
+      if (!document.hasFocus()) {
+        post({ type: "close" });
+      }
+    }, 0);
+  });
+  window.onmessage = (event) => {
+    const msg = event.data.pluginMessage;
+    if (!msg) return;
+    switch (msg.type) {
+      case "init":
+        timeoutMs = msg.timeoutMs;
+        timeoutEnabled = msg.timeoutEnabled;
+        bindings = msg.bindings;
+        renderBindings();
+        applyState(msg);
+        focusCapture();
+        break;
+      case "state":
+        if (msg.bindings) {
+          bindings = msg.bindings;
+          renderBindings();
+        }
+        applyState(msg);
+        break;
+      case "close":
+        clearTimer();
+        break;
+      case "error":
+        errorEl.textContent = msg.message;
+        armTimer();
+        focusCapture();
+        break;
+      default:
+        break;
+    }
+  };
+  post({ type: "ready" });
+  focusCapture();
+})();
+</script>
   </body>
 </html>

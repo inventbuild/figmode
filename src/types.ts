@@ -11,6 +11,8 @@ export type SizingMode = "FIXED" | "HUG" | "FILL";
 
 export type ValueKind =
   | "gap"
+  | "width"
+  | "height"
   | "paddingTop"
   | "paddingLeft"
   | "paddingRight"
@@ -48,9 +50,11 @@ export interface KeyBinding {
   label: string;
 }
 
+export type StackTransition = "push" | "pop" | "none";
+
 export type UiToPluginMessage =
   | { type: "ready" }
-  | { type: "ui-resize"; width: number; height: number }
+  | { type: "ui-resize"; height: number }
   | { type: "keydown"; key: string }
   | { type: "timeout" }
   | { type: "close" }
@@ -67,12 +71,14 @@ export type PluginToUiMessage =
       modeLabel: string;
       timeoutMs: number;
       timeoutEnabled: boolean;
+      transition: StackTransition;
     }
   | {
       type: "state";
       state: FigmodeState;
       uiSpec: UiSpec;
       modeLabel: string;
+      transition: StackTransition;
       bindings?: KeyBinding[];
     }
   | { type: "close" }
@@ -107,6 +113,5 @@ export interface UiSpec {
   items?: UiKeyItem[];
   footer: UiKeyItem[];
   valueText?: string;
-  width: number;
   height: number;
 }

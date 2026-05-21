@@ -1,29 +1,48 @@
 import type { FigmodeState, KeyBinding, UiKeyItem, UiSpec } from "./types";
+import { groupBindingsByScope } from "./binding-scope";
 import { getCurrentScope, inValueEntry } from "./mode-stack";
 
-const UI_SIZE = {
-  twoColumn: { width: 271, height: 195 },
-  alignmentGrid: { width: 340, height: 168 },
-  paddingGrid: { width: 300, height: 152 },
-  list: { width: 271, height: 132 },
-  value: { width: 271, height: 118 },
+/** Fixed HUD width — sized for the alignment grid (widest view). */
+export const UI_WIDTH = 340;
+
+const UI_HEIGHT = {
+  twoColumn: 195,
+  alignmentGrid: 168,
+  paddingGrid: 152,
+  list: 132,
+  value: 118,
 };
 
-function settingsSize(bindingCount: number): { width: number; height: number } {
+/** Fixed plugin frame height for all layout modes — avoids resize/reposition jank during stack transitions. */
+export const UI_LAYOUT_FRAME_HEIGHT = Math.max(
+  UI_HEIGHT.twoColumn,
+  UI_HEIGHT.alignmentGrid,
+  UI_HEIGHT.paddingGrid,
+  UI_HEIGHT.list,
+  UI_HEIGHT.value,
+);
+
+function settingsHeight(bindings: KeyBinding[]): number {
   const bodyPadding = 14;
   const title = 12;
   const sectionGap = 8;
-  const rowHeight = 22;
+  const rowHeight = 26;
+  const groupDivider = 9;
   const actions = 28;
   const error = 14;
-  return {
-    width: 271,
-    height:
-      bodyPadding + title + sectionGap + bindingCount * rowHeight + sectionGap + actions + error,
-  };
+  const groupCount = groupBindingsByScope(bindings).length;
+  const groupChrome = Math.max(0, groupCount - 1) * groupDivider;
+  return (
+    bodyPadding +
+    title +
+    sectionGap +
+    groupChrome +
+    bindings.length * rowHeight +
+    sectionGap +
+    actions +
+    error
+  );
 }
-
-export const UI_WIDTH = UI_SIZE.twoColumn.width;
 
 function displayKey(key: string): string {
   if (key === "Escape") return "esc";
@@ -62,7 +81,7 @@ function getBreadcrumb(state: FigmodeState): string[] {
   if (top.valueKind) {
     const submode = top.submode ?? "spacing";
     const crumbs = ["Layout", submode];
-    if (top.valueKind === "gap") {
+    if (top.valueKind === "gap" || top.valueKind === "width" || top.valueKind === "height") {
       crumbs.push("value");
     } else {
       crumbs.push(top.valueKind.replace(/^padding/, "").toLowerCase() || "value");
@@ -119,21 +138,21 @@ export function buildUiSpec(state: FigmodeState, bindings: KeyBinding[]): UiSpec
   const breadcrumb = getBreadcrumb(state);
 
   if (state.settingsOpen) {
-    const size = settingsSize(bindings.length);
     return {
       layout: "settings",
       breadcrumb: ["Settings"],
       footer,
-      width: size.width,
-      height: size.height,
+      height: settingsHeight(bindings),
     };
   }
 
   if (inValueEntry(state)) {
     const valueKeys: UiKeyItem[] = [
       { key: "0-9", label: "Type a value" },
-      { key: "↑", label: "Increment" },
-      { key: "↓", label: "Decrement" },
+      { key: "↑", label: "Increment (+1)" },
+      { key: "shift+↑", label: "Increment (+10)" },
+      { key: "↓", label: "Decrement (-1)" },
+      { key: "shift+↓", label: "Decrement (-10)" },
       { key: "enter", label: "Confirm" },
     ];
     return {
@@ -142,8 +161,7 @@ export function buildUiSpec(state: FigmodeState, bindings: KeyBinding[]): UiSpec
       items: valueKeys,
       footer,
       valueText: state.valueBuffer,
-      width: UI_SIZE.value.width,
-      height: UI_SIZE.value.height,
+      height: UI_HEIGHT.value,
     };
   }
 
@@ -156,8 +174,7 @@ export function buildUiSpec(state: FigmodeState, bindings: KeyBinding[]): UiSpec
       left: orderedKeys(bindings, LAYOUT_LEFT_ORDER),
       right: orderedKeys(bindings, LAYOUT_RIGHT_ORDER, true),
       footer,
-      width: UI_SIZE.twoColumn.width,
-      height: UI_SIZE.twoColumn.height,
+      height: UI_HEIGHT.twoColumn,
     };
   }
 
@@ -173,8 +190,7 @@ export function buildUiSpec(state: FigmodeState, bindings: KeyBinding[]): UiSpec
       breadcrumb,
       rows,
       footer,
-      width: UI_SIZE.alignmentGrid.width,
-      height: UI_SIZE.alignmentGrid.height,
+      height: UI_HEIGHT.alignmentGrid,
     };
   }
 
@@ -193,8 +209,7 @@ export function buildUiSpec(state: FigmodeState, bindings: KeyBinding[]): UiSpec
       breadcrumb,
       columns,
       footer,
-      width: UI_SIZE.paddingGrid.width,
-      height: UI_SIZE.paddingGrid.height,
+      height: UI_HEIGHT.paddingGrid,
     };
   }
 
@@ -207,7 +222,6 @@ export function buildUiSpec(state: FigmodeState, bindings: KeyBinding[]): UiSpec
     breadcrumb,
     items: scopeBindings,
     footer,
-    width: UI_SIZE.list.width,
-    height: UI_SIZE.list.height,
+    height: UI_HEIGHT.list,
   };
 }

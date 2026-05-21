@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Figmode</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --fm-white: #ffffff;
+        --fm-black: #000000;
+        --fm-gray: #bfbfbf;
+        --fm-dark-gray: #64696e;
+        --fm-light-gray: #d7d7d7;
+        font-family: Inter, system-ui, -apple-system, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        overflow: hidden;
+      }
+
+      body {
+        margin: 0;
+        padding: 7px;
+        background: var(--figma-color-bg, var(--fm-white));
+        color: var(--figma-color-text, var(--fm-black));
+        font-size: 12px;
+        line-height: normal;
+      }
+
+      .stack-viewport {
+        overflow: hidden;
+        position: relative;
+        flex: 1;
+        min-height: 128px;
+      }
+
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        width: 326px;
+        min-height: 174px;
+      }
+
+      .stack-stage {
+        display: grid;
+        grid-template-columns: 100%;
+      }
+
+      .stack-layer {
+        grid-area: 1 / 1;
+        min-width: 0;
+        background: var(--figma-color-bg, var(--fm-white));
+      }
+
+      .stack-layer.is-front {
+        z-index: 1;
+      }
+
+      .stack-layer.is-back {
+        z-index: 0;
+      }
+
+      .divider {
+        background: var(--fm-gray);
+        height: 1px;
+        border: 0;
+        margin: 0;
+        align-self: stretch;
+      }
+
+      .breadcrumb {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        color: var(--fm-dark-gray);
+        font-size: 10px;
+        font-weight: 400;
+        text-transform: uppercase;
+      }
+
+      .breadcrumb-sep {
+        width: 4px;
+        height: 8px;
+        flex-shrink: 0;
+      }
+
+      .breadcrumb-sep::before {
+        content: "›";
+        display: block;
+        font-size: 10px;
+        line-height: 8px;
+        color: var(--fm-dark-gray);
+      }
+
+      .key-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .key-pill {
+        background: var(--fm-light-gray);
+        border-radius: 5px;
+        color: var(--fm-black);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        font-weight: 400;
+        min-width: 30px;
+        padding: 3px 5px;
+        text-transform: lowercase;
+      }
+
+      .key-label {
+        color: var(--fm-black);
+        font-size: 12px;
+        font-weight: 400;
+        white-space: nowrap;
+      }
+
+      .key-label.mode-push {
+        font-weight: 700;
+      }
+
+      .columns-two {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+      }
+
+      .column {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      .columns-grid {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+      }
+
+      .alignment-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        column-gap: 10px;
+        row-gap: 5px;
+        align-items: center;
+      }
+
+      .list {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      .footer {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+      }
+
+      .value-display {
+        color: var(--fm-black);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        font-weight: 400;
+        min-height: 16px;
+      }
+
+      .error {
+        color: var(--figma-color-text-danger, #f24822);
+        font-size: 11px;
+        min-height: 14px;
+      }
+
+      .capture-input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+        width: 0;
+        height: 0;
+      }
+
+      .settings {
+        display: none;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .settings.open {
+        display: flex;
+      }
+
+      .settings h2 {
+        margin: 0;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .binding-row {
+        display: grid;
+        grid-template-columns: 1fr 72px;
+        gap: 6px;
+        align-items: start;
+      }
+
+      .binding-row label {
+        font-size: 11px;
+        line-height: 1.3;
+        white-space: normal;
+      }
+
+      .settings-divider {
+        background: var(--fm-gray);
+        height: 1px;
+        border: 0;
+        margin: 4px 0;
+        align-self: stretch;
+      }
+
+      .binding-row input {
+        width: 100%;
+        font: inherit;
+        font-size: 11px;
+        padding: 2px 4px;
+        border: 1px solid var(--figma-color-border, var(--fm-gray));
+        border-radius: 4px;
+        background: var(--figma-color-bg, var(--fm-white));
+        color: var(--figma-color-text, var(--fm-black));
+      }
+
+      .settings-actions {
+        display: flex;
+        gap: 6px;
+      }
+
+      button {
+        font: inherit;
+        font-size: 11px;
+        padding: 4px 8px;
+        border: 1px solid var(--figma-color-border, var(--fm-gray));
+        border-radius: 4px;
+        background: var(--figma-color-bg-secondary, var(--fm-light-gray));
+        color: var(--figma-color-text, var(--fm-black));
+        cursor: pointer;
+      }
+
+      button.primary {
+        background: var(--figma-color-bg-brand, var(--fm-black));
+        color: var(--figma-color-text-onbrand, var(--fm-white));
+        border-color: transparent;
+      }
+
+      .confirm {
+        display: none;
+        gap: 6px;
+        align-items: center;
+        font-size: 11px;
+      }
+
+      .confirm.open {
+        display: flex;
+      }
+
+      .panel.hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <input
+      id="capture"
+      class="capture-input"
+      autocomplete="off"
+      autocorrect="off"
+      spellcheck="false"
+      aria-label="Figmode keyboard capture"
+    />
+
+    <div id="panel" class="panel">
+      <div id="breadcrumb-host"></div>
+      <div id="stack-viewport" class="stack-viewport">
+        <div id="stack-stage" class="stack-stage"></div>
+      </div>
+      <hr class="divider" />
+      <div id="footer-host"></div>
+    </div>
+
+    <div id="settings" class="settings">
+      <h2>Settings</h2>
+      <div id="binding-list"></div>
+      <div class="settings-actions">
+        <button id="reset-bindings" type="button">Reset to defaults</button>
+        <button id="close-settings" type="button" class="primary">Done</button>
+      </div>
+      <div id="confirm-reset" class="confirm">
+        <span>Reset all key bindings?</span>
+        <button id="confirm-reset-yes" type="button" class="primary">Yes</button>
+        <button id="confirm-reset-no" type="button">No</button>
+      </div>
+    </div>
+
+    <div id="error" class="error"></div>
+
+    <script><!--FIGMODE_UI_BUNDLE--></script>
+  </body>
+</html>

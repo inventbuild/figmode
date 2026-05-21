@@ -139,6 +139,10 @@ export function getValueForKind(frame: LayoutTarget, kind: ValueKind): number {
   switch (kind) {
     case "gap":
       return frame.itemSpacing;
+    case "width":
+      return Math.round(frame.width);
+    case "height":
+      return Math.round(frame.height);
     case "paddingTop":
       return frame.paddingTop;
     case "paddingLeft":
@@ -167,6 +171,18 @@ export function applyNumericValue(
 
   if (kind === "gap") {
     setGap(frame, value);
+    return true;
+  }
+
+  if (kind === "width") {
+    frame.layoutSizingHorizontal = "FIXED";
+    frame.resize(value, frame.height);
+    return true;
+  }
+
+  if (kind === "height") {
+    frame.layoutSizingVertical = "FIXED";
+    frame.resize(frame.width, value);
     return true;
   }
 

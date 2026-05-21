@@ -1,5 +1,5 @@
 import { DEFAULT_TIMEOUT_MS, TIMEOUT_ENABLED } from "./types";
-import type { FigmodeState, KeyBinding, PluginToUiMessage, UiToPluginMessage, ValueKind } from "./types";
+import type { FigmodeState, KeyBinding, PluginToUiMessage, StackTransition, UiToPluginMessage, ValueKind } from "./types";
 import { loadBindings, resetBindings, saveBindingOverride } from "./settings";
 import {
   createInitialState,
@@ -28,16 +28,17 @@ import {
   requireAutoLayoutFrame,
   setActiveLayoutTarget,
 } from "./target";
-import { buildUiSpec } from "./ui-spec";
+import { buildUiSpec, UI_LAYOUT_FRAME_HEIGHT, UI_WIDTH } from "./ui-spec";
 
 let state: FigmodeState = createInitialState();
 let bindings: KeyBinding[] = [];
 
 const HUD_INSET = 10;
-let hudWidth = 0;
-let hudHeight = 0;
+let lastHudHeight = 0;
+let previousStackDepth = 1;
+let previousSettingsOpen = false;
 
-function hudPosition(width: number, height: number): { x: number; y: number } {
+function hudPosition(height: number): { x: number; y: number } {
   const bounds = figma.viewport.bounds;
   return {
     x: bounds.x + HUD_INSET,
@@ -45,15 +46,40 @@ function hudPosition(width: number, height: number): { x: number; y: number } {
   };
 }
 
-function syncHudFrame(width: number, height: number): void {
-  if (width <= 0 || height <= 0) {
+function syncHudFrame(height: number): void {
+  if (height <= 0) {
     return;
   }
-  hudWidth = width;
-  hudHeight = height;
-  figma.ui.resize(width, height);
-  const pos = hudPosition(width, height);
-  figma.ui.reposition(pos.x, pos.y);
+  const heightChanged = height !== lastHudHeight;
+  if (heightChanged) {
+    figma.ui.resize(UI_WIDTH, height);
+    lastHudHeight = height;
+    const pos = hudPosition(height);
+    figma.ui.reposition(pos.x, pos.y);
+  }
+}
+
+function layoutFrameHeight(): number {
+  return UI_LAYOUT_FRAME_HEIGHT;
+}
+
+function getStackTransition(next: FigmodeState): StackTransition {
+  if (next.settingsOpen !== previousSettingsOpen) {
+    return "none";
+  }
+  const depth = next.stack.length;
+  if (depth > previousStackDepth) {
+    return "push";
+  }
+  if (depth < previousStackDepth) {
+    return "pop";
+  }
+  return "none";
+}
+
+function rememberStackState(next: FigmodeState): void {
+  previousStackDepth = next.stack.length;
+  previousSettingsOpen = next.settingsOpen;
 }
 
 function postToUi(message: PluginToUiMessage): void {
@@ -62,12 +88,17 @@ function postToUi(message: PluginToUiMessage): void {
 
 function syncUi(): void {
   const uiSpec = buildUiSpec(state, bindings);
-  syncHudFrame(uiSpec.width, uiSpec.height);
+  const transition = getStackTransition(state);
+  if (transition === "none") {
+    syncHudFrame(state.settingsOpen ? uiSpec.height : layoutFrameHeight());
+  }
+  rememberStackState(state);
   postToUi({
     type: "state",
     state: { ...state, stack: [...state.stack] },
     uiSpec,
     modeLabel: getModeLabel(state),
+    transition,
     bindings,
   });
 }
@@ -141,14 +172,25 @@ function handleValueKey(key: string): FigmodeState {
 
   if (key === "Enter") {
     if (liveApplyValueBuffer(state.valueBuffer)) {
-      return popMode({ ...state, valueBuffer: "" });
+      let next = popMode({ ...state, valueBuffer: "" });
+      if (top.valueKind === "width" || top.valueKind === "height") {
+        next = popMode(next);
+      }
+      return next;
     }
     bindingError("Enter a valid non-negative integer.");
     return state;
   }
 
-  if (key === "ArrowUp" || key === "ArrowDown") {
-    const delta = key === "ArrowUp" ? 1 : -1;
+  if (
+    key === "ArrowUp" ||
+    key === "ArrowDown" ||
+    key === "Shift+ArrowUp" ||
+    key === "Shift+ArrowDown"
+  ) {
+    const up = key.endsWith("ArrowUp");
+    const step = key.startsWith("Shift+") ? 10 : 1;
+    const delta = up ? step : -step;
     const current =
       parseValueBuffer(state.valueBuffer) ?? getValueForKind(frame, top.valueKind);
     const nextValue = Math.max(0, current + delta);
@@ -214,7 +256,7 @@ function runLayoutBinding(binding: KeyBinding): FigmodeState {
       return state;
     case "layout.width.fixed":
       setHorizontalSizing(frame, "FIXED");
-      return popMode(state);
+      return enterValueKind("width");
     case "layout.width.hug":
       setHorizontalSizing(frame, "HUG");
       return popMode(state);
@@ -223,7 +265,7 @@ function runLayoutBinding(binding: KeyBinding): FigmodeState {
       return popMode(state);
     case "layout.height.fixed":
       setVerticalSizing(frame, "FIXED");
-      return popMode(state);
+      return enterValueKind("height");
     case "layout.height.hug":
       setVerticalSizing(frame, "HUG");
       return popMode(state);
@@ -314,14 +356,15 @@ async function initLayoutMode(): Promise<void> {
   setActiveLayoutTarget(frame);
   state = createInitialState();
   bindings = await loadBindings();
+  previousStackDepth = state.stack.length;
+  previousSettingsOpen = state.settingsOpen;
 
-  const uiSpec = buildUiSpec(state, bindings);
-  hudWidth = uiSpec.width;
-  hudHeight = uiSpec.height;
+  const frameHeight = layoutFrameHeight();
+  lastHudHeight = frameHeight;
   figma.showUI(__html__, {
-    width: uiSpec.width,
-    height: uiSpec.height,
-    position: hudPosition(uiSpec.width, uiSpec.height),
+    width: UI_WIDTH,
+    height: frameHeight,
+    position: hudPosition(frameHeight),
     themeColors: true,
   });
 }
@@ -343,11 +386,12 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
         modeLabel: getModeLabel(state),
         timeoutMs: DEFAULT_TIMEOUT_MS,
         timeoutEnabled: TIMEOUT_ENABLED,
+        transition: "none",
       });
       break;
     }
     case "ui-resize":
-      syncHudFrame(msg.width, msg.height);
+      syncHudFrame(msg.height);
       break;
     case "keydown":
       await handleKeydown(msg.key);

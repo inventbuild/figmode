@@ -22,7 +22,9 @@ export function getModeLabel(state: FigmodeState): string {
   if (!top) return "inactive";
   if (top.valueKind) {
     const submode = top.submode ?? "spacing";
-    if (top.valueKind === "gap") return "layout > spacing > value";
+    if (top.valueKind === "gap" || top.valueKind === "width" || top.valueKind === "height") {
+      return `layout > ${submode} > value`;
+    }
     return `layout > padding > ${top.valueKind}`;
   }
   if (top.submode) return `layout > ${top.submode}`;
@@ -50,7 +52,11 @@ export function pushValueKind(
   if (!top || top.mode !== "layout" || !top.submode) return state;
 
   if (valueKind === "gap" && top.submode !== "spacing") return state;
-  if (valueKind !== "gap" && top.submode !== "padding") return state;
+  if (valueKind === "width" && top.submode !== "width") return state;
+  if (valueKind === "height" && top.submode !== "height") return state;
+  if (valueKind !== "gap" && valueKind !== "width" && valueKind !== "height" && top.submode !== "padding") {
+    return state;
+  }
 
   return {
     ...state,
@@ -98,8 +104,10 @@ export function getAvailableKeys(
 
   if (inValueEntry(state)) {
     keys.push({ key: "0-9", label: "Enter numeric value" });
-    keys.push({ key: "ArrowUp", label: "Increment" });
-    keys.push({ key: "ArrowDown", label: "Decrement" });
+    keys.push({ key: "ArrowUp", label: "Increment (+1)" });
+    keys.push({ key: "Shift+ArrowUp", label: "Increment (+10)" });
+    keys.push({ key: "ArrowDown", label: "Decrement (-1)" });
+    keys.push({ key: "Shift+ArrowDown", label: "Decrement (-10)" });
     keys.push({ key: "Backspace", label: "Delete digit" });
     keys.push({ key: "Enter", label: "Confirm value" });
   }
