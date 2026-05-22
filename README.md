@@ -1,40 +1,114 @@
-Below are the steps to get your plugin running. You can also find instructions at:
+# Figmode
 
-  https://www.figma.com/plugin-docs/plugin-quickstart-guide/
+Vi-style "modal" keyboard control for Figma autolayout. Set flow, sizing, alignment, gap, and padding in a few keystrokes instead of clicking through the properties panel.
 
-This plugin template uses Typescript and NPM, two standard tools in creating JavaScript applications.
+Figmode (like `vi`) uses "modes" to interpret key inputs. This allows you to keep your left hand in one place, as nearly all of the (default) keys are located there.
 
-First, download Node.js which comes with NPM. This will allow you to install TypeScript and other
-libraries. You can find the download link here:
+For example, to rapidly set a frame's flow direction to row, width mode to hug, height mode to fixed 20px, spacing to 5, and padding-all to 10, you would type `r`, `w`, `s`, `` ` ``, `h`, `a`, `20`, `` ` ``, `s`, `5`, `` ` ``, `p`, `s`, `10`.
 
-  https://nodejs.org/en/download/
+Believe it or not, once you get used to what all the keys do, you can do this extremely quickly and efficiently.
 
-Next, install TypeScript using the command:
+## How it works
 
-  npm install -g typescript
+1. Select one or more objects (or an existing autolayout frame).
+2. Run **Plugins → Figmode → Layout Mode** (I recommend assigning a shortcut at your OS level; more information on this below).
+3. A small HUD appears in the bottom-left showing the current mode and available keys.
+4. Type key sequences to set parameters and change modes. Modes are a stack, so you go deeper with a key, and back out with `` ` ``.
+5. Press **Esc** to quit at any time, or tap `` ` `` until it exits.
 
-Finally, in the directory of your plugin, get the latest type definitions for the plugin API by running:
+If the selection isn’t an autolayout yet, Figmode wraps it in a frame (or converts a group) and applies vertical auto layout.
 
-  npm install --save-dev @figma/plugin-typings
+Changes apply live as you type. In value entry, digits update the frame immediately; **Enter** confirms and backs out.
 
-If you are familiar with JavaScript, TypeScript will look very familiar. In fact, valid JavaScript code
-is already valid Typescript code.
+## Global keys
 
-TypeScript adds type annotations to variables. This allows code editors such as Visual Studio Code
-to provide information about the Figma API while you are writing code, as well as help catch bugs
-you previously didn't notice.
+| Key       | Action                                    |
+| --------- | ----------------------------------------- |
+| `` ` ``   | Back one mode (at root, closes Figmode)   |
+| `Esc`     | Quit                                      |
+| `Shift+S` | Settings — remap keys (does not time out) |
 
-For more information, visit https://www.typescriptlang.org/
+## Layout mode
 
-Using TypeScript requires a compiler to convert TypeScript (code.ts) into JavaScript (code.js)
-for the browser to run.
+| Key | Action                    |
+| --- | ------------------------- |
+| `R` | Row flow                  |
+| `C` | Column flow               |
+| `F` | Freeform (no auto layout) |
+| `G` | Grid flow                 |
+| `E` | Toggle wrap               |
+| `W` | Width                     |
+| `H` | Height                    |
+| `A` | Alignment                 |
+| `S` | Spacing (gap)             |
+| `P` | Padding                   |
 
-We recommend writing TypeScript code using Visual Studio code:
+### Width / Height
 
-1. Download Visual Studio Code if you haven't already: https://code.visualstudio.com/.
-2. Open this directory in Visual Studio Code.
-3. Compile TypeScript to JavaScript: Run the "Terminal > Run Build Task..." menu item,
-    then select "npm: watch". You will have to do this again every time
-    you reopen Visual Studio Code.
+| Key | Action                    |
+| --- | ------------------------- |
+| `A` | Fixed — enter pixel value |
+| `S` | Hug contents              |
+| `D` | Fill container            |
 
-That's it! Visual Studio Code will regenerate the JavaScript file every time you save.
+### Alignment
+
+Nine keys map to the alignment grid:
+
+```
+Q  W  E     top-left    top    top-right
+A  S  D  =  left        center right
+Z  X  C     bottom-left bottom bottom-right
+```
+
+### Spacing
+
+| Key | Action                                                    |
+| --- | --------------------------------------------------------- |
+| `F` | Toggle auto gap ↔ fixed px gap (fixed enters value entry) |
+
+Entering spacing with a fixed gap already set goes straight to gap value entry.
+
+### Padding
+
+| Key | Side       |
+| --- | ---------- |
+| `S` | All        |
+| `W` | Top        |
+| `A` | Left       |
+| `D` | Right      |
+| `X` | Bottom     |
+| `Q` | Horizontal |
+| `E` | Vertical   |
+
+### Value entry
+
+Used for gap, width, height, and padding.
+
+| Key                   | Action              |
+| --------------------- | ------------------- |
+| `0`–`9`               | Type digits         |
+| `↑` / `↓`             | ±1                  |
+| `Shift+↑` / `Shift+↓` | ±10                 |
+| `Backspace`           | Delete digit        |
+| `Enter`               | Confirm and go back |
+
+## Example
+
+Row layout, fill width, 16px horizontal padding:
+
+```
+R          → row
+W D        → width → fill
+`          → back to layout
+P Q 16 ↵   → padding → horizontal → 16 → confirm
+```
+
+## Development
+
+```bash
+pnpm install
+pnpm run build    # or pnpm run watch
+```
+
+Import the plugin in Figma via **Plugins → Development → Import plugin from manifest…** and point at this folder. Re-run the plugin after changing main-thread code.
