@@ -16,6 +16,7 @@ import {
   inSettingsMode,
   inValueEntry,
   isAtRoot,
+  isSpacingSubmode,
   popMode,
   pushSubmode,
   pushValueKind,
@@ -439,6 +440,88 @@ function handleValueKey(key: string): FigmodeState {
   return state;
 }
 
+function isSpacingGapValueKey(key: string): boolean {
+  return (
+    key === "Enter" ||
+    key === "Backspace" ||
+    /^\d$/.test(key) ||
+    key === "ArrowUp" ||
+    key === "ArrowDown" ||
+    key === "Shift+ArrowUp" ||
+    key === "Shift+ArrowDown"
+  );
+}
+
+function inSpacingGapEdit(): boolean {
+  if (!isSpacingSubmode(state)) {
+    return false;
+  }
+  const frame = requireAutoLayoutFrame();
+  return frame !== null && isAbsoluteGap(frame);
+}
+
+function liveApplySpacingGapBuffer(buffer: string): boolean {
+  const frame = requireAutoLayoutFrame();
+  if (!frame || !isAbsoluteGap(frame)) {
+    return false;
+  }
+
+  const value = parseValueBuffer(buffer);
+  if (value === null) {
+    return false;
+  }
+
+  return applyNumericValue(frame, "gap", value);
+}
+
+function handleSpacingGapKey(key: string): FigmodeState {
+  const frame = requireAutoLayoutFrame();
+  if (!frame || !isAbsoluteGap(frame)) {
+    return state;
+  }
+
+  if (key === "Enter") {
+    if (liveApplySpacingGapBuffer(state.valueBuffer)) {
+      return state;
+    }
+    bindingError("Enter a valid non-negative integer.");
+    return state;
+  }
+
+  if (
+    key === "ArrowUp" ||
+    key === "ArrowDown" ||
+    key === "Shift+ArrowUp" ||
+    key === "Shift+ArrowDown"
+  ) {
+    const up = key.endsWith("ArrowUp");
+    const step = key.startsWith("Shift+") ? 10 : 1;
+    const delta = up ? step : -step;
+    const current =
+      parseValueBuffer(state.valueBuffer) ?? getValueForKind(frame, "gap");
+    const nextValue = Math.max(0, current + delta);
+    const nextBuffer = String(nextValue);
+    applyNumericValue(frame, "gap", nextValue);
+    return { ...state, valueBuffer: nextBuffer };
+  }
+
+  if (key === "Backspace") {
+    const nextBuffer = state.valueBuffer.slice(0, -1);
+    if (nextBuffer !== "") {
+      liveApplySpacingGapBuffer(nextBuffer);
+    }
+    return { ...state, valueBuffer: nextBuffer };
+  }
+
+  if (/^\d$/.test(key)) {
+    const nextBuffer = state.valueBuffer + key;
+    liveApplySpacingGapBuffer(nextBuffer);
+    return { ...state, valueBuffer: nextBuffer };
+  }
+
+  return state;
+}
+
 function runLayoutBinding(binding: KeyBinding): FigmodeState {
   const frame = requireLayoutTarget();
   if (!frame) {
@@ -482,7 +565,10 @@ function runLayoutBinding(binding: KeyBinding): FigmodeState {
     case "layout.submode.spacing": {
       const withSpacing = pushSubmode(state, "spacing");
       if (isAbsoluteGap(frame)) {
-        return enterValueKindOnState(withSpacing, "gap");
+        return {
+          ...withSpacing,
+          valueBuffer: String(getValueForKind(frame, "gap")),
+        };
       }
       return withSpacing;
     }
@@ -522,11 +608,14 @@ function runLayoutBinding(binding: KeyBinding): FigmodeState {
       return state;
     case "layout.spacing.gapToggle": {
       const autoGap = toggleAutoGap(frame);
-      const next = { ...state, autoGap };
-      if (!autoGap) {
-        return enterValueKind("gap");
+      if (autoGap) {
+        return { ...state, autoGap, valueBuffer: "" };
       }
-      return next;
+      return {
+        ...state,
+        autoGap,
+        valueBuffer: String(getValueForKind(frame, "gap")),
+      };
     }
     case "layout.padding.all":
       return enterValueKind("paddingAll");
@@ -582,6 +671,12 @@ async function handleKeydown(key: string): Promise<void> {
         settingsHudLaunchDraft: { ...saved },
       };
     }
+    syncUi();
+    return;
+  }
+
+  if (inSpacingGapEdit() && isSpacingGapValueKey(key)) {
+    state = handleSpacingGapKey(key);
     syncUi();
     return;
   }

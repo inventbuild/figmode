@@ -153,7 +153,7 @@ export const DEFAULT_BINDINGS: KeyBinding[] = [
     id: "layout.spacing.gapToggle",
     scope: "layout.spacing",
     key: "f",
-    label: "Toggle auto / px gap",
+    label: "Toggle auto / fixed gap",
   },
   {
     id: "layout.padding.all",

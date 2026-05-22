@@ -323,6 +323,13 @@
         align-items: flex-start;
       }
 
+      .spacing-mode {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        align-items: flex-start;
+      }
+
       .value-input {
         box-sizing: border-box;
         border: 1px solid var(--figma-color-border);
@@ -1400,7 +1407,7 @@
       id: "layout.spacing.gapToggle",
       scope: "layout.spacing",
       key: "f",
-      label: "Toggle auto / px gap"
+      label: "Toggle auto / fixed gap"
     },
     {
       id: "layout.padding.all",
@@ -1726,7 +1733,8 @@
   }
   function syncValueInputInPlace(uiSpec) {
     var _a;
-    if (uiSpec.layout !== "value") {
+    const hasValueInput = uiSpec.layout === "value" || uiSpec.layout === "spacing" && uiSpec.valueText !== void 0;
+    if (!hasValueInput) {
       return false;
     }
     const input = document.getElementById(
@@ -1966,6 +1974,37 @@
       cols.append(left, right);
       wrap2.append(input, cols);
       content.appendChild(wrap2);
+    } else if (uiSpec.layout === "spacing") {
+      const wrap2 = el("div", "spacing-mode");
+      const list = el("div", "list");
+      (uiSpec.items || []).forEach(
+        (item) => list.appendChild(renderKeyRow(item))
+      );
+      wrap2.appendChild(list);
+      if (uiSpec.valueText !== void 0) {
+        const input = document.createElement("input");
+        input.type = "text";
+        input.id = "value-input";
+        input.className = "value-input";
+        input.inputMode = "numeric";
+        input.autocomplete = "off";
+        input.spellcheck = false;
+        input.setAttribute("aria-label", "Gap value");
+        input.value = uiSpec.valueText;
+        wireValueInput(input);
+        const cols = el("div", "columns-two");
+        const left = el("div", "column");
+        const right = el("div", "column");
+        (uiSpec.left || []).forEach(
+          (item) => left.appendChild(renderKeyRow(item))
+        );
+        (uiSpec.right || []).forEach(
+          (item) => right.appendChild(renderKeyRow(item))
+        );
+        cols.append(left, right);
+        wrap2.append(input, cols);
+      }
+      content.appendChild(wrap2);
     } else if ((_b = uiSpec.items) == null ? void 0 : _b.length) {
       const list = el("div", "list");
       uiSpec.items.forEach((item) => list.appendChild(renderKeyRow(item)));
@@ -2067,9 +2106,10 @@
     void animateStackTransition(transition, currentLayer, nextLayer).then(() => finishStackTransition(currentLayer)).catch(() => finishStackTransition(currentLayer));
   }
   function applyState(payload) {
+    var _a;
     const top = payload.state.stack[payload.state.stack.length - 1];
     inSettings = (top == null ? void 0 : top.mode) === "settings";
-    inValueMode = Boolean(top == null ? void 0 : top.valueKind);
+    inValueMode = Boolean(top == null ? void 0 : top.valueKind) || ((_a = payload.uiSpec) == null ? void 0 : _a.layout) === "spacing" && payload.uiSpec.valueText !== void 0;
     errorEl.textContent = "";
     if (payload.uiSpec) {
       lastUiSpec = payload.uiSpec;

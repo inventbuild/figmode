@@ -350,7 +350,10 @@ function wireValueInput(input: HTMLInputElement): void {
 
 /** Update the value field in place — avoids rebuilding DOM and losing the caret. */
 function syncValueInputInPlace(uiSpec: UiSpec): boolean {
-  if (uiSpec.layout !== "value") {
+  const hasValueInput =
+    uiSpec.layout === "value" ||
+    (uiSpec.layout === "spacing" && uiSpec.valueText !== undefined);
+  if (!hasValueInput) {
     return false;
   }
   const input = document.getElementById(
@@ -627,6 +630,42 @@ function buildContent(uiSpec: UiSpec): HTMLDivElement {
 
     wrap.append(input, cols);
     content.appendChild(wrap);
+  } else if (uiSpec.layout === "spacing") {
+    const wrap = el("div", "spacing-mode");
+
+    const list = el("div", "list");
+    (uiSpec.items || []).forEach((item) =>
+      list.appendChild(renderKeyRow(item)),
+    );
+    wrap.appendChild(list);
+
+    if (uiSpec.valueText !== undefined) {
+      const input = document.createElement("input");
+      input.type = "text";
+      input.id = "value-input";
+      input.className = "value-input";
+      input.inputMode = "numeric";
+      input.autocomplete = "off";
+      input.spellcheck = false;
+      input.setAttribute("aria-label", "Gap value");
+      input.value = uiSpec.valueText;
+      wireValueInput(input);
+
+      const cols = el("div", "columns-two");
+      const left = el("div", "column");
+      const right = el("div", "column");
+      (uiSpec.left || []).forEach((item) =>
+        left.appendChild(renderKeyRow(item)),
+      );
+      (uiSpec.right || []).forEach((item) =>
+        right.appendChild(renderKeyRow(item)),
+      );
+      cols.append(left, right);
+
+      wrap.append(input, cols);
+    }
+
+    content.appendChild(wrap);
   } else if (uiSpec.items?.length) {
     const list = el("div", "list");
     uiSpec.items.forEach((item) => list.appendChild(renderKeyRow(item)));
@@ -761,7 +800,10 @@ function applyState(
 ): void {
   const top = payload.state.stack[payload.state.stack.length - 1];
   inSettings = top?.mode === "settings";
-  inValueMode = Boolean(top?.valueKind);
+  inValueMode =
+    Boolean(top?.valueKind) ||
+    (payload.uiSpec?.layout === "spacing" &&
+      payload.uiSpec.valueText !== undefined);
   errorEl.textContent = "";
 
   if (payload.uiSpec) {

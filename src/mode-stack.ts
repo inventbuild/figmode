@@ -115,6 +115,15 @@ export function inValueEntry(state: FigmodeState): boolean {
   return Boolean(top?.valueKind);
 }
 
+export function isSpacingSubmode(state: FigmodeState): boolean {
+  const top = state.stack[state.stack.length - 1];
+  return (
+    top?.mode === "layout" &&
+    top.submode === "spacing" &&
+    !top.valueKind
+  );
+}
+
 export function getAvailableKeys(
   state: FigmodeState,
   bindings: KeyBinding[],

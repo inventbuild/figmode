@@ -105,6 +105,7 @@ export type UiLayout =
   | "paddingGrid"
   | "list"
   | "value"
+  | "spacing"
   | "settings";
 
 export interface UiKeyItem {

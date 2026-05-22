@@ -22,11 +22,11 @@ Changes apply live as you type. In value entry, digits update the frame immediat
 
 ## Global keys
 
-| Key       | Action                                    |
-| --------- | ----------------------------------------- |
-| `` ` ``   | Back one mode (at root, closes Figmode)   |
-| `Esc`     | Quit                                      |
-| `Shift+S` | Open settings |
+| Key       | Action                                  |
+| --------- | --------------------------------------- |
+| `` ` ``   | Back one mode (at root, closes Figmode) |
+| `Esc`     | Quit                                    |
+| `Shift+S` | Open settings                           |
 
 ## Settings
 
@@ -111,6 +111,20 @@ W D        → width → fill
 `          → back to layout
 P Q 16 ↵   → padding → horizontal → 16 → confirm
 ```
+
+# Binding a key to Figmode
+
+Figma does not offer user keybindings (not sure why). Until they do, the best option I know of is to do it at the OS layer. On MacOS:
+
+1. Open System Settings
+2. Search for "Keyboard Shortcuts"
+3. Open the Keyboard Shortcuts menu under the Keyboard panel
+4. Open the "App Shortcuts" section
+5. Add an App Shortcut with these parameters:
+
+- App: `Figma`
+- Menu title: `Plugins->Figmode->Layout Mode`
+- Keyboard shortcut: your choice, I use `option+cmd+D`
 
 ## Development
 

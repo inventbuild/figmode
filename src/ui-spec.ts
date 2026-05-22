@@ -6,6 +6,7 @@ import {
 } from "./layout-capabilities";
 import { getCurrentScope, inSettingsMode, inValueEntry } from "./mode-stack";
 import { settingsAreDirty } from "./settings";
+import { isAbsoluteGap } from "./modes/layout";
 import type { LayoutTarget } from "./target";
 
 /** Fixed HUD width — sized for the alignment grid (widest view). */
@@ -16,7 +17,7 @@ export const UI_WIDTH = 340;
  * After changing: `npm run build`, then close Figmode and re-run Layout Mode
  * (Figma does not hot-reload the plugin main thread).
  */
-export const UI_FRAME_HEIGHT = 190;
+export const UI_FRAME_HEIGHT = 200;
 
 function displayKey(key: string): string {
   if (key === "Escape") return "esc";
@@ -66,7 +67,10 @@ const PADDING_VALUE_CRUMB: Partial<Record<string, string>> = {
   paddingAll: "All",
 };
 
-function getBreadcrumb(state: FigmodeState): string[] {
+function getBreadcrumb(
+  state: FigmodeState,
+  frame: LayoutTarget | null = null,
+): string[] {
   const top = state.stack[state.stack.length - 1];
   if (!top) return ["Layout"];
 
@@ -86,6 +90,13 @@ function getBreadcrumb(state: FigmodeState): string[] {
   }
 
   if (top.submode) {
+    if (top.submode === "spacing" && frame && isAutoLayout(frame)) {
+      return [
+        "Layout",
+        "spacing",
+        isAbsoluteGap(frame) ? "fixed" : "auto",
+      ];
+    }
     return ["Layout", top.submode];
   }
 
@@ -106,6 +117,18 @@ const LAYOUT_RIGHT_ORDER = [
   "layout.submode.alignment",
   "layout.submode.spacing",
   "layout.submode.padding",
+];
+
+const VALUE_ENTRY_LEFT: UiKeyItem[] = [
+  { key: "0-9", label: "Enter value" },
+  { key: "↑", label: "Increment (+1)" },
+  { key: "↓", label: "Decrement (-1)" },
+];
+
+const VALUE_ENTRY_RIGHT: UiKeyItem[] = [
+  { key: "enter", label: "Confirm" },
+  { key: "shift+↑", label: "Increment (+10)" },
+  { key: "shift+↓", label: "Decrement (-10)" },
 ];
 
 const ALIGNMENT_GRID = [
@@ -157,7 +180,7 @@ export function buildUiSpec(
   } = {},
 ): UiSpec {
   const footer = footerKeys(bindings);
-  const breadcrumb = getBreadcrumb(state);
+  const breadcrumb = getBreadcrumb(state, frame);
 
   if (inSettingsMode(state)) {
     const draft = state.settingsDraft ?? bindings;
@@ -186,21 +209,11 @@ export function buildUiSpec(
   }
 
   if (inValueEntry(state)) {
-    const valueLeft: UiKeyItem[] = [
-      { key: "0-9", label: "Enter value" },
-      { key: "↑", label: "Increment (+1)" },
-      { key: "↓", label: "Decrement (-1)" },
-    ];
-    const valueRight: UiKeyItem[] = [
-      { key: "enter", label: "Confirm" },
-      { key: "shift+↑", label: "Increment (+10)" },
-      { key: "shift+↓", label: "Decrement (-10)" },
-    ];
     return {
       layout: "value",
       breadcrumb,
-      left: valueLeft,
-      right: valueRight,
+      left: VALUE_ENTRY_LEFT,
+      right: VALUE_ENTRY_RIGHT,
       footer,
       valueText: state.valueBuffer,
       height: UI_FRAME_HEIGHT,
@@ -250,6 +263,40 @@ export function buildUiSpec(
     };
   }
 
+  if (scope === "layout.spacing") {
+    if (!frame || !isAutoLayout(frame)) {
+      return {
+        layout: "list",
+        breadcrumb,
+        items: [],
+        footer,
+        height: UI_FRAME_HEIGHT,
+      };
+    }
+
+    const toggleItems = orderedKeys(bindings, ["layout.spacing.gapToggle"]);
+    if (isAbsoluteGap(frame)) {
+      return {
+        layout: "spacing",
+        breadcrumb,
+        items: toggleItems,
+        left: VALUE_ENTRY_LEFT,
+        right: VALUE_ENTRY_RIGHT,
+        valueText: state.valueBuffer,
+        footer,
+        height: UI_FRAME_HEIGHT,
+      };
+    }
+
+    return {
+      layout: "spacing",
+      breadcrumb,
+      items: toggleItems,
+      footer,
+      height: UI_FRAME_HEIGHT,
+    };
+  }
+
   if (scope === "layout.padding") {
     if (!frame || !isAutoLayout(frame)) {
       return {
@@ -294,9 +341,6 @@ export function buildUiSpec(
       }
       if (scope === "layout.height") {
         return sizingSubmodeBindingIds("height", frame).includes(binding.id);
-      }
-      if (scope === "layout.spacing") {
-        return isAutoLayout(frame);
       }
       return true;
     })
