@@ -6,7 +6,6 @@ export function createInitialState(): FigmodeState {
     valueBuffer: "",
     autoGap: false,
     settingsDraft: null,
-    settingsHudInsetDraft: null,
     resetHudPositionDraft: false,
   };
 }
@@ -43,7 +42,6 @@ export function getModeLabel(state: FigmodeState): string {
 export function enterSettings(
   state: FigmodeState,
   bindings: KeyBinding[],
-  hudInset: number,
 ): FigmodeState {
   const top = state.stack[state.stack.length - 1];
   if (!top || top.mode !== "layout") return state;
@@ -51,7 +49,6 @@ export function enterSettings(
     ...state,
     stack: [...state.stack, { mode: "settings" }],
     settingsDraft: bindings.map((binding) => ({ ...binding })),
-    settingsHudInsetDraft: hudInset,
     resetHudPositionDraft: false,
   };
 }
@@ -104,7 +101,6 @@ export function popMode(state: FigmodeState): FigmodeState {
   };
   if (top.mode === "settings") {
     next.settingsDraft = null;
-    next.settingsHudInsetDraft = null;
     next.resetHudPositionDraft = false;
   }
   return next;

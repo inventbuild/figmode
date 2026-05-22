@@ -51,9 +51,7 @@ import {
   clearHudPosition,
   clampHudPosition,
   defaultHudPosition,
-  loadHudInset,
   loadHudPosition,
-  saveHudInset,
   saveHudPosition,
 } from "./hud-position";
 import type { HudPoint } from "./hud-position";
@@ -67,7 +65,6 @@ let lastHudHeight = 0;
 let hudX = 0;
 let hudY = 0;
 let hudUsesCustomPosition = false;
-let savedHudInset = 30;
 let previousStackDepth = 1;
 let previousInSettings = false;
 let lastTrackedHudPos: { x: number; y: number } | null = null;
@@ -76,7 +73,7 @@ let refocusAfterMoveTimer: ReturnType<typeof setTimeout> | null = null;
 
 function applyHudPosition(height: number): { x: number; y: number } {
   if (!hudUsesCustomPosition) {
-    const point = defaultHudPosition(height, savedHudInset);
+    const point = defaultHudPosition(height, DEFAULT_HUD_INSET);
     hudX = point.x;
     hudY = point.y;
   } else {
@@ -98,7 +95,7 @@ function noteUserMovedHud(height: number): void {
     return;
   }
   const { canvasSpace } = figma.ui.getPosition();
-  const expected = defaultHudPosition(height, savedHudInset);
+  const expected = defaultHudPosition(height, DEFAULT_HUD_INSET);
   if (
     Math.abs(canvasSpace.x - expected.x) > 1 ||
     Math.abs(canvasSpace.y - expected.y) > 1
@@ -194,7 +191,7 @@ function hudPositionToPersist(): HudPoint | null {
   try {
     const contentHeight = lastHudHeight || layoutFrameHeight();
     const { canvasSpace } = figma.ui.getPosition();
-    const expected = defaultHudPosition(contentHeight, savedHudInset);
+    const expected = defaultHudPosition(contentHeight, DEFAULT_HUD_INSET);
     const moved =
       Math.abs(canvasSpace.x - expected.x) > POSITION_EPSILON ||
       Math.abs(canvasSpace.y - expected.y) > POSITION_EPSILON;
@@ -235,7 +232,6 @@ function repositionToDefault(): void {
 }
 
 async function initHudPlacement(height: number): Promise<void> {
-  savedHudInset = await loadHudInset();
   const saved = await loadHudPosition();
   if (saved) {
     hudUsesCustomPosition = true;
@@ -244,16 +240,23 @@ async function initHudPlacement(height: number): Promise<void> {
     hudY = clamped.y;
   } else {
     hudUsesCustomPosition = false;
-    const point = defaultHudPosition(height, savedHudInset);
+    const point = defaultHudPosition(height, DEFAULT_HUD_INSET);
     hudX = point.x;
     hudY = point.y;
   }
 }
 
 function buildUiSpecOptions() {
+  const contentHeight = lastHudHeight || layoutFrameHeight();
+  const defaultPoint = defaultHudPosition(contentHeight, DEFAULT_HUD_INSET);
+  const resetDraft = inSettingsMode(state) && state.resetHudPositionDraft;
+  const launchPoint =
+    resetDraft || !hudUsesCustomPosition ? defaultPoint : { x: hudX, y: hudY };
+
   return {
-    savedHudInset,
     hasCustomHudPosition: hudUsesCustomPosition,
+    hudLaunchX: Math.round(launchPoint.x),
+    hudLaunchY: Math.round(launchPoint.y),
   };
 }
 
@@ -637,7 +640,7 @@ async function handleKeydown(key: string): Promise<void> {
       await closeFigmode();
       return;
     } else if (binding.id === "any.settings") {
-      state = enterSettings(state, bindings, savedHudInset);
+      state = enterSettings(state, bindings);
     }
     syncUi();
     return;
@@ -762,18 +765,7 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
         state = {
           ...state,
           settingsDraft: createDefaultDraft(),
-          settingsHudInsetDraft: DEFAULT_HUD_INSET,
           resetHudPositionDraft: true,
-        };
-        syncUi();
-      }
-      break;
-    case "settings-draft-hud-inset":
-      if (inSettingsMode(state)) {
-        const inset = Math.max(0, Math.round(msg.inset));
-        state = {
-          ...state,
-          settingsHudInsetDraft: inset,
         };
         syncUi();
       }
@@ -782,17 +774,14 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
       if (inSettingsMode(state)) {
         state = {
           ...state,
-          settingsHudInsetDraft: DEFAULT_HUD_INSET,
           resetHudPositionDraft: true,
         };
         syncUi();
       }
       break;
     case "settings-save":
-      if (inSettingsMode(state) && state.settingsDraft && state.settingsHudInsetDraft !== null) {
+      if (inSettingsMode(state) && state.settingsDraft) {
         bindings = await saveAllBindings(state.settingsDraft);
-        await saveHudInset(state.settingsHudInsetDraft);
-        savedHudInset = state.settingsHudInsetDraft;
 
         if (state.resetHudPositionDraft) {
           await clearHudPosition();
@@ -804,7 +793,6 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
         state = {
           ...state,
           settingsDraft: bindings.map((binding) => ({ ...binding })),
-          settingsHudInsetDraft: savedHudInset,
           resetHudPositionDraft: false,
         };
         syncUi();

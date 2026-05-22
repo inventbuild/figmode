@@ -45,15 +45,10 @@ export function bindingDiffersFromDefault(binding: KeyBinding): boolean {
 export function settingsAreDirty(
   draft: KeyBinding[],
   saved: KeyBinding[],
-  hudInsetDraft: number,
-  savedHudInset: number,
   resetHudPositionDraft: boolean,
   hasCustomHudPosition: boolean,
 ): boolean {
   if (resetHudPositionDraft && hasCustomHudPosition) {
-    return true;
-  }
-  if (hudInsetDraft !== savedHudInset) {
     return true;
   }
   return !bindingsMatchSaved(draft, saved);

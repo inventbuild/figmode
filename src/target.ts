@@ -105,6 +105,7 @@ function wrapNodesInAutoLayout(nodes: SceneNode[]): LayoutTarget | null {
   }
 
   const frame = figma.createFrame();
+  frame.fills = [];
   frame.x = bounds.x;
   frame.y = bounds.y;
   frame.resize(bounds.width, bounds.height);
@@ -137,6 +138,7 @@ function convertGroupToAutoLayout(group: GroupNode): LayoutTarget | null {
   }
 
   const frame = figma.createFrame();
+  frame.fills = [];
   frame.x = group.x;
   frame.y = group.y;
   frame.resize(group.width, group.height);

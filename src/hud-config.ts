@@ -10,3 +10,4 @@ export const HUD_RESIZE_THRESHOLD = 2;
 
 // Note: Figma does not hot-reload plugin main-thread code. After changing HUD_INSET,
 // close Figmode and re-run the Layout command (watch rebuild alone is not enough).
+// Launch position is stored separately in clientStorage when the HUD is moved.

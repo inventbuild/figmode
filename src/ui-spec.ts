@@ -7,7 +7,6 @@ import {
 } from "./layout-capabilities";
 import { getCurrentScope, inSettingsMode, inValueEntry } from "./mode-stack";
 import { settingsAreDirty } from "./settings";
-import { DEFAULT_HUD_INSET } from "./hud-config";
 import type { LayoutTarget } from "./target";
 
 /** Fixed HUD width — sized for the alignment grid (widest view). */
@@ -38,7 +37,7 @@ function settingsHeight(bindings: KeyBinding[]): number {
   const groupDivider = 9;
   const actions = 28;
   const error = 14;
-  const hudSection = 72;
+  const hudSection = 34;
   const groupCount = groupBindingsByScope(bindings).length;
   const groupChrome = Math.max(0, groupCount - 1) * groupDivider;
   return (
@@ -186,8 +185,9 @@ export function buildUiSpec(
   bindings: KeyBinding[],
   frame: LayoutTarget | null = null,
   options: {
-    savedHudInset?: number;
     hasCustomHudPosition?: boolean;
+    hudLaunchX?: number;
+    hudLaunchY?: number;
   } = {},
 ): UiSpec {
   const footer = footerKeys(bindings);
@@ -195,8 +195,6 @@ export function buildUiSpec(
 
   if (inSettingsMode(state)) {
     const draft = state.settingsDraft ?? bindings;
-    const hudInsetDraft = state.settingsHudInsetDraft ?? options.savedHudInset ?? DEFAULT_HUD_INSET;
-    const savedHudInset = options.savedHudInset ?? DEFAULT_HUD_INSET;
     const hasCustomHudPosition = options.hasCustomHudPosition ?? false;
     return {
       layout: "settings",
@@ -206,15 +204,13 @@ export function buildUiSpec(
       settingsDirty: settingsAreDirty(
         draft,
         bindings,
-        hudInsetDraft,
-        savedHudInset,
         state.resetHudPositionDraft,
         hasCustomHudPosition,
       ),
-      hudInset: hudInsetDraft,
-      defaultHudInset: DEFAULT_HUD_INSET,
       hasCustomHudPosition,
       resetHudPositionDraft: state.resetHudPositionDraft,
+      hudLaunchX: options.hudLaunchX,
+      hudLaunchY: options.hudLaunchY,
       height: settingsHeight(draft),
     };
   }

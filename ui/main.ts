@@ -83,27 +83,85 @@ function syncSettingsInPlace(uiSpec: UiSpec): boolean {
       input.classList.remove("recording");
     }
     if (revert) {
-      revert.hidden = !differs;
+      revert.classList.toggle("is-hidden", !differs);
     }
   }
 
-  const insetInput = document.getElementById(
-    "hud-inset-input",
-  ) as HTMLInputElement | null;
-  if (insetInput && document.activeElement !== insetInput) {
-    insetInput.value = String(uiSpec.hudInset ?? uiSpec.defaultHudInset ?? 30);
-  }
+  syncHudLaunchPositionFields(uiSpec);
 
-  const resetHudButton = document.getElementById(
-    "reset-hud-position",
+  const resetHudRevert = document.querySelector(
+    'button[data-revert-hud-position="true"]',
   ) as HTMLButtonElement | null;
-  if (resetHudButton) {
-    resetHudButton.textContent = uiSpec.resetHudPositionDraft
-      ? "Reset HUD on save"
-      : "Reset HUD position";
+  if (resetHudRevert) {
+    const showRevert =
+      Boolean(uiSpec.hasCustomHudPosition) && !uiSpec.resetHudPositionDraft;
+    resetHudRevert.classList.toggle("is-hidden", !showRevert);
   }
 
   return true;
+}
+
+function syncHudLaunchPositionFields(uiSpec: UiSpec): void {
+  const xInput = document.getElementById(
+    "hud-launch-x",
+  ) as HTMLInputElement | null;
+  const yInput = document.getElementById(
+    "hud-launch-y",
+  ) as HTMLInputElement | null;
+  if (xInput && uiSpec.hudLaunchX !== undefined) {
+    xInput.value = String(uiSpec.hudLaunchX);
+  }
+  if (yInput && uiSpec.hudLaunchY !== undefined) {
+    yInput.value = String(uiSpec.hudLaunchY);
+  }
+}
+
+function buildHudLaunchPositionField(
+  axis: "x" | "y",
+  id: string,
+  value: number | undefined,
+): HTMLDivElement {
+  const field = el("div", "hud-position-field");
+  field.appendChild(el("span", "hud-position-axis", axis));
+  const input = document.createElement("input");
+  input.id = id;
+  input.readOnly = true;
+  input.value = value !== undefined ? String(value) : "";
+  field.appendChild(input);
+  return field;
+}
+
+function buildHudLaunchPositionFields(uiSpec: UiSpec): HTMLDivElement {
+  const fields = el("div", "hud-position-fields");
+  fields.append(
+    buildHudLaunchPositionField("x", "hud-launch-x", uiSpec.hudLaunchX),
+    buildHudLaunchPositionField("y", "hud-launch-y", uiSpec.hudLaunchY),
+  );
+  return fields;
+}
+
+function appendRevertButton(
+  keyWrap: HTMLDivElement,
+  options: {
+    hidden: boolean;
+    title: string;
+    onClick: () => void;
+    dataset?: Record<string, string>;
+  },
+): void {
+  const slot = el("div", "binding-revert-slot");
+  const revert = el("button", "binding-revert", "↩");
+  revert.type = "button";
+  revert.title = options.title;
+  revert.classList.toggle("is-hidden", options.hidden);
+  revert.onclick = options.onClick;
+  if (options.dataset) {
+    for (const [key, value] of Object.entries(options.dataset)) {
+      revert.dataset[key] = value;
+    }
+  }
+  slot.appendChild(revert);
+  keyWrap.appendChild(slot);
 }
 
 function post(message: UiToPluginMessage): void {
@@ -312,16 +370,14 @@ function renderBindingRows(bindings: KeyBinding[]): HTMLDivElement {
       keyWrap.appendChild(input);
 
       const defaultKey = DEFAULT_BINDINGS.find((item) => item.id === binding.id)?.key;
-      const revert = el("button", "binding-revert", "↩");
-      revert.type = "button";
-      revert.title = "Revert to default";
-      revert.dataset.revertBindingId = binding.id;
-      revert.hidden =
-        defaultKey === undefined || binding.key === defaultKey;
-      revert.onclick = () => {
-        post({ type: "settings-draft-reset-binding", bindingId: binding.id });
-      };
-      keyWrap.appendChild(revert);
+      appendRevertButton(keyWrap, {
+        hidden: defaultKey === undefined || binding.key === defaultKey,
+        title: "Revert to default",
+        onClick: () => {
+          post({ type: "settings-draft-reset-binding", bindingId: binding.id });
+        },
+        dataset: { revertBindingId: binding.id },
+      });
 
       row.append(label, keyWrap);
       list.appendChild(row);
@@ -334,36 +390,21 @@ function buildHudSettingsSection(uiSpec: UiSpec): HTMLDivElement {
   const section = el("div", "hud-settings");
   section.appendChild(el("div", "settings-section-title", "HUD"));
 
-  const insetRow = el("div", "binding-row");
-  const insetLabel = el("label", undefined, "Default inset (px)");
-  const insetInput = document.createElement("input");
-  insetInput.type = "number";
-  insetInput.min = "0";
-  insetInput.id = "hud-inset-input";
-  insetInput.value = String(uiSpec.hudInset ?? uiSpec.defaultHudInset ?? 30);
-  insetInput.addEventListener("change", () => {
-    const inset = Number.parseInt(insetInput.value, 10);
-    if (Number.isNaN(inset)) {
-      return;
-    }
-    post({ type: "settings-draft-hud-inset", inset });
+  const row = el("div", "binding-row");
+  const label = el("label", undefined, "Launch position");
+  const keyWrap = el("div", "binding-key-wrap");
+  keyWrap.appendChild(buildHudLaunchPositionFields(uiSpec));
+  appendRevertButton(keyWrap, {
+    hidden:
+      !uiSpec.hasCustomHudPosition || Boolean(uiSpec.resetHudPositionDraft),
+    title: "Reset launch position on save",
+    onClick: () => {
+      post({ type: "settings-draft-reset-hud" });
+    },
+    dataset: { revertHudPosition: "true" },
   });
-
-  const insetWrap = el("div", "binding-key-wrap");
-  insetWrap.appendChild(insetInput);
-  insetRow.append(insetLabel, insetWrap);
-
-  const resetHudButton = el("button", undefined, "Reset HUD position");
-  resetHudButton.type = "button";
-  resetHudButton.id = "reset-hud-position";
-  if (uiSpec.resetHudPositionDraft) {
-    resetHudButton.textContent = "Reset HUD on save";
-  }
-  resetHudButton.onclick = () => {
-    post({ type: "settings-draft-reset-hud" });
-  };
-
-  section.append(insetRow, resetHudButton);
+  row.append(label, keyWrap);
+  section.appendChild(row);
   return section;
 }
 
