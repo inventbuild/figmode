@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -6,7 +6,11 @@
     <style>
       :root {
         color-scheme: light dark;
-        font-family: Inter, system-ui, -apple-system, sans-serif;
+        font-family:
+          Inter,
+          system-ui,
+          -apple-system,
+          sans-serif;
       }
 
       * {
@@ -174,17 +178,22 @@
         border: 1px solid var(--figma-color-border);
         border-radius: 10px;
         padding: 6px 12px;
-        font-family: Inter, system-ui, -apple-system, sans-serif;
+        font-family:
+          Inter,
+          system-ui,
+          -apple-system,
+          sans-serif;
         font-size: 18px;
         font-weight: 400;
         line-height: normal;
         color: var(--figma-color-text);
         background: var(--figma-color-bg);
         align-self: flex-start;
-        min-width: 0;
+        min-width: 2ch;
         width: auto;
         caret-color: var(--figma-color-text);
         outline: none;
+        cursor: text;
       }
 
       .value-input:focus {
@@ -306,7 +315,8 @@
 
     <div id="error" class="error"></div>
 
-    <script>"use strict";
+    <script>
+      "use strict";
 (() => {
   // node_modules/@motionone/utils/dist/array.es.js
   function addUniqueItem(array, item) {
@@ -1090,8 +1100,12 @@
   // ui/main.ts
   var capture = document.getElementById("capture");
   var panel = document.getElementById("panel");
-  var breadcrumbHost = document.getElementById("breadcrumb-host");
-  var stackViewport = document.getElementById("stack-viewport");
+  var breadcrumbHost = document.getElementById(
+    "breadcrumb-host"
+  );
+  var stackViewport = document.getElementById(
+    "stack-viewport"
+  );
   var stackStage = document.getElementById("stack-stage");
   var footerHost = document.getElementById("footer-host");
   var errorEl = document.getElementById("error");
@@ -1107,7 +1121,9 @@
   var lastReportedHeight = 0;
   var reportSizeFrameId = null;
   var stackAnimating = false;
-  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var reduceMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)"
+  ).matches;
   function post(message) {
     parent.postMessage({ pluginMessage: message }, "*");
   }
@@ -1153,14 +1169,50 @@
     if (inSettings) {
       return;
     }
-    const valueInput = document.getElementById("value-input");
+    const valueInput = document.getElementById(
+      "value-input"
+    );
     if (inValueMode && valueInput) {
-      valueInput.focus({ preventScroll: true });
-      const length = valueInput.value.length;
-      valueInput.setSelectionRange(length, length);
+      requestAnimationFrame(() => {
+        valueInput.focus({ preventScroll: true });
+        const length = valueInput.value.length;
+        valueInput.setSelectionRange(length, length);
+      });
       return;
     }
     capture.focus({ preventScroll: true });
+  }
+  function wireValueInput(input) {
+    input.addEventListener("keydown", handlePluginKeydown);
+    input.addEventListener("beforeinput", (event) => {
+      event.preventDefault();
+    });
+    input.addEventListener("paste", (event) => {
+      event.preventDefault();
+    });
+    input.addEventListener("blur", () => {
+      requestAnimationFrame(() => {
+        if (inValueMode) {
+          focusKeyTarget();
+        }
+      });
+    });
+  }
+  function syncValueInputInPlace(uiSpec) {
+    var _a;
+    if (uiSpec.layout !== "value") {
+      return false;
+    }
+    const input = document.getElementById("value-input");
+    if (!input) {
+      return false;
+    }
+    const nextValue = (_a = uiSpec.valueText) != null ? _a : "";
+    if (input.value !== nextValue) {
+      input.value = nextValue;
+    }
+    focusKeyTarget();
+    return true;
   }
   function clearTimer() {
     if (timeoutId !== null) {
@@ -1182,7 +1234,10 @@
   function renderKeyRow(item) {
     const row = el("div", "key-row");
     row.appendChild(el("span", "key-pill", item.key));
-    const label = el("span", item.isModePush ? "key-label mode-push" : "key-label");
+    const label = el(
+      "span",
+      item.isModePush ? "key-label mode-push" : "key-label"
+    );
     label.textContent = item.isModePush ? `\u2192 ${item.label}` : item.label;
     row.appendChild(label);
     return row;
@@ -1289,7 +1344,9 @@
       const left = el("div", "column");
       const right = el("div", "column");
       (uiSpec.left || []).forEach((item) => left.appendChild(renderKeyRow(item)));
-      (uiSpec.right || []).forEach((item) => right.appendChild(renderKeyRow(item)));
+      (uiSpec.right || []).forEach(
+        (item) => right.appendChild(renderKeyRow(item))
+      );
       cols.append(left, right);
       content.appendChild(cols);
     } else if (uiSpec.layout === "alignmentGrid") {
@@ -1312,16 +1369,19 @@
       input.type = "text";
       input.id = "value-input";
       input.className = "value-input";
-      input.readOnly = true;
       input.inputMode = "numeric";
+      input.autocomplete = "off";
+      input.spellcheck = false;
       input.setAttribute("aria-label", "Numeric value");
       input.value = (_a = uiSpec.valueText) != null ? _a : "";
-      input.addEventListener("keydown", handlePluginKeydown);
+      wireValueInput(input);
       const cols = el("div", "columns-two");
       const left = el("div", "column");
       const right = el("div", "column");
       (uiSpec.left || []).forEach((item) => left.appendChild(renderKeyRow(item)));
-      (uiSpec.right || []).forEach((item) => right.appendChild(renderKeyRow(item)));
+      (uiSpec.right || []).forEach(
+        (item) => right.appendChild(renderKeyRow(item))
+      );
       cols.append(left, right);
       wrap2.append(input, cols);
       content.appendChild(wrap2);
@@ -1398,6 +1458,9 @@
   function setStackContent(uiSpec, transition) {
     const currentLayer = stackStage.querySelector(".stack-layer");
     updateChrome(uiSpec);
+    if (transition === "none" && syncValueInputInPlace(uiSpec)) {
+      return;
+    }
     const nextContent = buildContent(uiSpec);
     const canAnimate = !reduceMotion && !stackAnimating && currentLayer && (transition === "push" || transition === "pop");
     if (!canAnimate) {
@@ -1493,6 +1556,7 @@
   post({ type: "ready" });
   focusKeyTarget();
 })();
-</script>
+
+    </script>
   </body>
 </html>

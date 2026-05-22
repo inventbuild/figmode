@@ -10,8 +10,12 @@ import type {
 
 const capture = document.getElementById("capture") as HTMLInputElement;
 const panel = document.getElementById("panel") as HTMLDivElement;
-const breadcrumbHost = document.getElementById("breadcrumb-host") as HTMLDivElement;
-const stackViewport = document.getElementById("stack-viewport") as HTMLDivElement;
+const breadcrumbHost = document.getElementById(
+  "breadcrumb-host",
+) as HTMLDivElement;
+const stackViewport = document.getElementById(
+  "stack-viewport",
+) as HTMLDivElement;
 const stackStage = document.getElementById("stack-stage") as HTMLDivElement;
 const footerHost = document.getElementById("footer-host") as HTMLDivElement;
 const errorEl = document.getElementById("error") as HTMLDivElement;
@@ -29,7 +33,9 @@ let recordingBindingId: string | null = null;
 let lastReportedHeight = 0;
 let reportSizeFrameId: number | null = null;
 let stackAnimating = false;
-const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const reduceMotion = window.matchMedia(
+  "(prefers-reduced-motion: reduce)",
+).matches;
 
 function post(message: UiToPluginMessage): void {
   parent.postMessage({ pluginMessage: message }, "*");
@@ -83,14 +89,53 @@ function focusKeyTarget(): void {
   if (inSettings) {
     return;
   }
-  const valueInput = document.getElementById("value-input") as HTMLInputElement | null;
+  const valueInput = document.getElementById(
+    "value-input",
+  ) as HTMLInputElement | null;
   if (inValueMode && valueInput) {
-    valueInput.focus({ preventScroll: true });
-    const length = valueInput.value.length;
-    valueInput.setSelectionRange(length, length);
+    requestAnimationFrame(() => {
+      valueInput.focus({ preventScroll: true });
+      const length = valueInput.value.length;
+      valueInput.setSelectionRange(length, length);
+    });
     return;
   }
   capture.focus({ preventScroll: true });
+}
+
+function wireValueInput(input: HTMLInputElement): void {
+  input.addEventListener("keydown", handlePluginKeydown);
+  input.addEventListener("beforeinput", (event) => {
+    event.preventDefault();
+  });
+  input.addEventListener("paste", (event) => {
+    event.preventDefault();
+  });
+  input.addEventListener("blur", () => {
+    requestAnimationFrame(() => {
+      if (inValueMode) {
+        focusKeyTarget();
+      }
+    });
+  });
+}
+
+/** Update the value field in place — avoids rebuilding DOM and losing the caret. */
+function syncValueInputInPlace(uiSpec: UiSpec): boolean {
+  if (uiSpec.layout !== "value") {
+    return false;
+  }
+  const input = document.getElementById("value-input") as HTMLInputElement | null;
+  if (!input) {
+    return false;
+  }
+
+  const nextValue = uiSpec.valueText ?? "";
+  if (input.value !== nextValue) {
+    input.value = nextValue;
+  }
+  focusKeyTarget();
+  return true;
 }
 
 function clearTimer(): void {
@@ -117,10 +162,17 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-function renderKeyRow(item: { key: string; label: string; isModePush?: boolean }): HTMLDivElement {
+function renderKeyRow(item: {
+  key: string;
+  label: string;
+  isModePush?: boolean;
+}): HTMLDivElement {
   const row = el("div", "key-row");
   row.appendChild(el("span", "key-pill", item.key));
-  const label = el("span", item.isModePush ? "key-label mode-push" : "key-label");
+  const label = el(
+    "span",
+    item.isModePush ? "key-label mode-push" : "key-label",
+  );
   label.textContent = item.isModePush ? `→ ${item.label}` : item.label;
   row.appendChild(label);
   return row;
@@ -243,7 +295,9 @@ function buildContent(uiSpec: UiSpec): HTMLDivElement {
     const left = el("div", "column");
     const right = el("div", "column");
     (uiSpec.left || []).forEach((item) => left.appendChild(renderKeyRow(item)));
-    (uiSpec.right || []).forEach((item) => right.appendChild(renderKeyRow(item)));
+    (uiSpec.right || []).forEach((item) =>
+      right.appendChild(renderKeyRow(item)),
+    );
     cols.append(left, right);
     content.appendChild(cols);
   } else if (uiSpec.layout === "alignmentGrid") {
@@ -267,17 +321,20 @@ function buildContent(uiSpec: UiSpec): HTMLDivElement {
     input.type = "text";
     input.id = "value-input";
     input.className = "value-input";
-    input.readOnly = true;
     input.inputMode = "numeric";
+    input.autocomplete = "off";
+    input.spellcheck = false;
     input.setAttribute("aria-label", "Numeric value");
     input.value = uiSpec.valueText ?? "";
-    input.addEventListener("keydown", handlePluginKeydown);
+    wireValueInput(input);
 
     const cols = el("div", "columns-two");
     const left = el("div", "column");
     const right = el("div", "column");
     (uiSpec.left || []).forEach((item) => left.appendChild(renderKeyRow(item)));
-    (uiSpec.right || []).forEach((item) => right.appendChild(renderKeyRow(item)));
+    (uiSpec.right || []).forEach((item) =>
+      right.appendChild(renderKeyRow(item)),
+    );
     cols.append(left, right);
 
     wrap.append(input, cols);
@@ -369,6 +426,11 @@ function setStackContent(uiSpec: UiSpec, transition: StackTransition): void {
   const currentLayer = stackStage.querySelector<HTMLElement>(".stack-layer");
 
   updateChrome(uiSpec);
+
+  if (transition === "none" && syncValueInputInPlace(uiSpec)) {
+    return;
+  }
+
   const nextContent = buildContent(uiSpec);
 
   const canAnimate =
@@ -393,7 +455,9 @@ function setStackContent(uiSpec: UiSpec, transition: StackTransition): void {
     .catch(() => finishStackTransition(currentLayer));
 }
 
-function applyState(payload: Extract<PluginToUiMessage, { type: "init" | "state" }>): void {
+function applyState(
+  payload: Extract<PluginToUiMessage, { type: "init" | "state" }>,
+): void {
   const top = payload.state.stack[payload.state.stack.length - 1];
   inSettings = top?.mode === "settings";
   inValueMode = Boolean(top?.valueKind);
