@@ -39,7 +39,7 @@ export const DEFAULT_BINDINGS: KeyBinding[] = [
     id: "layout.submode.height",
     scope: "layout",
     key: "h",
-    label: "Height mode",
+    label: "Height",
   },
   {
     id: "layout.submode.alignment",

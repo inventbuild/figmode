@@ -3,15 +3,21 @@ import type { AvailableKey, FigmodeState, KeyBinding, ModeStackFrame } from "./t
 export function createInitialState(): FigmodeState {
   return {
     stack: [{ mode: "layout" }],
-    settingsOpen: false,
     valueBuffer: "",
     autoGap: false,
+    settingsDraft: null,
   };
+}
+
+export function inSettingsMode(state: FigmodeState): boolean {
+  const top = state.stack[state.stack.length - 1];
+  return top?.mode === "settings";
 }
 
 export function getCurrentScope(stack: ModeStackFrame[]): string {
   const top = stack[stack.length - 1];
   if (!top) return "layout";
+  if (top.mode === "settings") return "settings";
   if (top.valueKind) return `layout.${top.submode ?? "spacing"}.value`;
   if (top.submode) return `layout.${top.submode}`;
   return top.mode;
@@ -20,6 +26,7 @@ export function getCurrentScope(stack: ModeStackFrame[]): string {
 export function getModeLabel(state: FigmodeState): string {
   const top = state.stack[state.stack.length - 1];
   if (!top) return "inactive";
+  if (top.mode === "settings") return "settings";
   if (top.valueKind) {
     const submode = top.submode ?? "spacing";
     if (top.valueKind === "gap" || top.valueKind === "width" || top.valueKind === "height") {
@@ -29,6 +36,16 @@ export function getModeLabel(state: FigmodeState): string {
   }
   if (top.submode) return `layout > ${top.submode}`;
   return top.mode;
+}
+
+export function enterSettings(state: FigmodeState, bindings: KeyBinding[]): FigmodeState {
+  const top = state.stack[state.stack.length - 1];
+  if (!top || top.mode !== "layout") return state;
+  return {
+    ...state,
+    stack: [...state.stack, { mode: "settings" }],
+    settingsDraft: bindings.map((binding) => ({ ...binding })),
+  };
 }
 
 export function pushSubmode(
@@ -71,11 +88,16 @@ export function isAtRoot(state: FigmodeState): boolean {
 
 export function popMode(state: FigmodeState): FigmodeState {
   if (isAtRoot(state)) return state;
-  return {
+  const top = state.stack[state.stack.length - 1];
+  const next: FigmodeState = {
     ...state,
     stack: state.stack.slice(0, -1),
     valueBuffer: "",
   };
+  if (top.mode === "settings") {
+    next.settingsDraft = null;
+  }
+  return next;
 }
 
 export function inValueEntry(state: FigmodeState): boolean {
@@ -87,7 +109,7 @@ export function getAvailableKeys(
   state: FigmodeState,
   bindings: KeyBinding[],
 ): AvailableKey[] {
-  if (state.settingsOpen) return [];
+  if (inSettingsMode(state)) return [];
 
   const scope = getCurrentScope(state.stack);
   const scopes = scope.endsWith(".value") ? ["any"] : ["any", scope];

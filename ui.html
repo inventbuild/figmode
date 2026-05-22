@@ -190,20 +190,16 @@
         height: 0;
       }
 
-      .settings {
-        display: none;
+      .settings-view {
+        display: flex;
         flex-direction: column;
         gap: 8px;
       }
 
-      .settings.open {
+      .binding-list {
         display: flex;
-      }
-
-      .settings h2 {
-        margin: 0;
-        font-size: 12px;
-        font-weight: 700;
+        flex-direction: column;
+        gap: 0;
       }
 
       .binding-row {
@@ -270,10 +266,6 @@
       .confirm.open {
         display: flex;
       }
-
-      .panel.hidden {
-        display: none;
-      }
     </style>
   </head>
   <body>
@@ -293,20 +285,6 @@
       </div>
       <hr class="divider" />
       <div id="footer-host"></div>
-    </div>
-
-    <div id="settings" class="settings">
-      <h2>Settings</h2>
-      <div id="binding-list"></div>
-      <div class="settings-actions">
-        <button id="reset-bindings" type="button">Reset to defaults</button>
-        <button id="close-settings" type="button" class="primary">Done</button>
-      </div>
-      <div id="confirm-reset" class="confirm">
-        <span>Reset all key bindings?</span>
-        <button id="confirm-reset-yes" type="button" class="primary">Yes</button>
-        <button id="confirm-reset-no" type="button">No</button>
-      </div>
     </div>
 
     <div id="error" class="error"></div>
@@ -1099,40 +1077,42 @@
   var stackViewport = document.getElementById("stack-viewport");
   var stackStage = document.getElementById("stack-stage");
   var footerHost = document.getElementById("footer-host");
-  var settings = document.getElementById("settings");
   var errorEl = document.getElementById("error");
-  var bindingList = document.getElementById("binding-list");
-  var confirmReset = document.getElementById("confirm-reset");
   var BODY_PADDING = 14;
   var STACK_DURATION = 0.22;
   var STACK_EASING = [0.2, 0, 0, 1];
   var timeoutMs = 1e3;
   var timeoutEnabled = true;
   var timeoutId = null;
-  var settingsOpen = false;
-  var bindings = [];
+  var inSettings = false;
   var recordingBindingId = null;
   var lastReportedHeight = 0;
+  var reportSizeFrameId = null;
   var stackAnimating = false;
   var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   function post(message) {
     parent.postMessage({ pluginMessage: message }, "*");
   }
   function measurePanelHeight() {
-    const content = settingsOpen ? settings : panel;
-    return Math.ceil(content.offsetHeight + errorEl.offsetHeight + BODY_PADDING);
+    return Math.ceil(panel.offsetHeight + errorEl.offsetHeight + BODY_PADDING);
   }
   function reportSize() {
-    if (!settingsOpen) {
+    if (!inSettings) {
       return;
     }
-    requestAnimationFrame(() => {
-      const height = measurePanelHeight();
-      if (height <= 0 || height === lastReportedHeight) {
-        return;
-      }
-      lastReportedHeight = height;
-      post({ type: "ui-resize", height });
+    if (reportSizeFrameId !== null) {
+      cancelAnimationFrame(reportSizeFrameId);
+    }
+    reportSizeFrameId = requestAnimationFrame(() => {
+      reportSizeFrameId = requestAnimationFrame(() => {
+        reportSizeFrameId = null;
+        const height = measurePanelHeight();
+        if (height <= 0 || height === lastReportedHeight) {
+          return;
+        }
+        lastReportedHeight = height;
+        post({ type: "ui-resize", height });
+      });
     });
   }
   function formatKeyFromEvent(event) {
@@ -1162,7 +1142,7 @@
   }
   function armTimer() {
     clearTimer();
-    if (!timeoutEnabled || settingsOpen) return;
+    if (!timeoutEnabled || inSettings) return;
     timeoutId = setTimeout(() => post({ type: "timeout" }), timeoutMs);
   }
   function el(tag, className, text) {
@@ -1194,9 +1174,88 @@
     footer.forEach((item) => wrap2.appendChild(renderKeyRow(item)));
     return wrap2;
   }
+  function renderBindingRows(bindings) {
+    const list = el("div", "binding-list");
+    const groups = groupBindingsByScope(bindings);
+    groups.forEach((group, index) => {
+      if (index > 0) {
+        const divider = document.createElement("hr");
+        divider.className = "settings-divider";
+        list.appendChild(divider);
+      }
+      for (const binding of group.items) {
+        const row = document.createElement("div");
+        row.className = "binding-row";
+        const label = document.createElement("label");
+        const path = bindingFullPath(binding.scope, binding.label);
+        label.textContent = path;
+        label.title = path;
+        const input = document.createElement("input");
+        input.value = binding.key;
+        input.readOnly = true;
+        input.dataset.bindingId = binding.id;
+        input.addEventListener("focus", () => {
+          recordingBindingId = binding.id;
+          input.value = "Press a key\u2026";
+        });
+        input.addEventListener("blur", () => {
+          if (recordingBindingId === binding.id) {
+            recordingBindingId = null;
+            input.value = binding.key;
+          }
+        });
+        row.append(label, input);
+        list.appendChild(row);
+      }
+    });
+    return list;
+  }
+  function buildSettingsView(uiSpec) {
+    const wrap2 = el("div", "settings-view");
+    wrap2.appendChild(renderBindingRows(uiSpec.bindings || []));
+    const actions = el("div", "settings-actions");
+    const resetButton = el("button", void 0, "Reset to defaults");
+    resetButton.type = "button";
+    resetButton.id = "reset-bindings";
+    const saveButton = el("button", "primary", "Save");
+    saveButton.type = "button";
+    saveButton.id = "save-bindings";
+    saveButton.hidden = !uiSpec.settingsDirty;
+    actions.append(resetButton, saveButton);
+    wrap2.appendChild(actions);
+    const confirm = el("div", "confirm");
+    confirm.id = "confirm-reset";
+    confirm.appendChild(el("span", void 0, "Reset all key bindings?"));
+    const yes = el("button", "primary", "Yes");
+    yes.type = "button";
+    yes.id = "confirm-reset-yes";
+    const no = el("button", void 0, "No");
+    no.type = "button";
+    no.id = "confirm-reset-no";
+    confirm.append(yes, no);
+    wrap2.appendChild(confirm);
+    resetButton.onclick = () => {
+      confirm.classList.add("open");
+    };
+    yes.onclick = () => {
+      post({ type: "settings-draft-reset" });
+      confirm.classList.remove("open");
+    };
+    no.onclick = () => {
+      confirm.classList.remove("open");
+    };
+    saveButton.onclick = () => {
+      post({ type: "settings-save" });
+    };
+    return wrap2;
+  }
   function buildContent(uiSpec) {
     var _a, _b;
     const content = el("div", "stack-content");
+    if (uiSpec.layout === "settings") {
+      content.appendChild(buildSettingsView(uiSpec));
+      return content;
+    }
     if (uiSpec.layout === "twoColumn") {
       const cols = el("div", "columns-two");
       const left = el("div", "column");
@@ -1256,6 +1315,7 @@
       fromLayer.remove();
     }
     stackAnimating = false;
+    reportSize();
   }
   async function animateStackTransition(transition, currentLayer, nextLayer) {
     resetLayerStyles(currentLayer);
@@ -1302,74 +1362,31 @@
     if (!canAnimate) {
       stackStage.replaceChildren();
       mountStackLayer(nextContent);
+      reportSize();
       return;
     }
     stackAnimating = true;
     const nextLayer = mountStackLayer(nextContent);
     void animateStackTransition(transition, currentLayer, nextLayer).then(() => finishStackTransition(currentLayer)).catch(() => finishStackTransition(currentLayer));
   }
-  function renderUiSpec(uiSpec, transition) {
-    setStackContent(uiSpec, transition);
-  }
-  function renderBindings() {
-    bindingList.replaceChildren();
-    const groups = groupBindingsByScope(bindings);
-    groups.forEach((group, index) => {
-      if (index > 0) {
-        const divider = document.createElement("hr");
-        divider.className = "settings-divider";
-        bindingList.appendChild(divider);
-      }
-      for (const binding of group.items) {
-        const row = document.createElement("div");
-        row.className = "binding-row";
-        const label = document.createElement("label");
-        const path = bindingFullPath(binding.scope, binding.label);
-        label.textContent = path;
-        label.title = path;
-        const input = document.createElement("input");
-        input.value = binding.key;
-        input.readOnly = true;
-        input.dataset.bindingId = binding.id;
-        input.addEventListener("focus", () => {
-          recordingBindingId = binding.id;
-          input.value = "Press a key\u2026";
-        });
-        input.addEventListener("blur", () => {
-          if (recordingBindingId === binding.id) {
-            recordingBindingId = null;
-            input.value = binding.key;
-          }
-        });
-        row.append(label, input);
-        bindingList.appendChild(row);
-      }
-    });
-    reportSize();
-  }
   function applyState(payload) {
-    settingsOpen = payload.state.settingsOpen;
+    var _a;
+    inSettings = ((_a = payload.state.stack[payload.state.stack.length - 1]) == null ? void 0 : _a.mode) === "settings";
     errorEl.textContent = "";
-    if (payload.uiSpec && !settingsOpen) {
+    if (payload.uiSpec) {
       renderUiSpec(payload.uiSpec, payload.transition || "none");
     }
-    if (settingsOpen) {
-      panel.classList.add("hidden");
-      settings.classList.add("open");
+    if (inSettings) {
       clearTimer();
       lastReportedHeight = 0;
       reportSize();
     } else {
-      panel.classList.remove("hidden");
-      settings.classList.remove("open");
-      confirmReset.classList.remove("open");
       armTimer();
       focusCapture();
-      if (payload.transition === "none") {
-        lastReportedHeight = 0;
-        reportSize();
-      }
     }
+  }
+  function renderUiSpec(uiSpec, transition) {
+    setStackContent(uiSpec, transition);
   }
   capture.addEventListener("keydown", (event) => {
     event.preventDefault();
@@ -1378,7 +1395,7 @@
       const key2 = formatKeyFromEvent(event);
       if (["Control", "Alt", "Shift", "Meta"].includes(event.key)) return;
       post({
-        type: "settings-update",
+        type: "settings-draft-update",
         bindingId: recordingBindingId,
         key: key2
       });
@@ -1386,28 +1403,17 @@
       capture.blur();
       return;
     }
-    if (settingsOpen) return;
     const key = formatKeyFromEvent(event);
     if (!key || ["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
+      return;
+    }
+    if (inSettings) {
+      post({ type: "keydown", key });
       return;
     }
     post({ type: "keydown", key });
     armTimer();
   });
-  document.getElementById("close-settings").onclick = () => {
-    post({ type: "settings-close" });
-    focusCapture();
-  };
-  document.getElementById("reset-bindings").onclick = () => {
-    confirmReset.classList.add("open");
-  };
-  document.getElementById("confirm-reset-yes").onclick = () => {
-    post({ type: "settings-reset" });
-    confirmReset.classList.remove("open");
-  };
-  document.getElementById("confirm-reset-no").onclick = () => {
-    confirmReset.classList.remove("open");
-  };
   window.addEventListener("blur", () => {
     window.setTimeout(() => {
       if (!document.hasFocus()) {
@@ -1422,16 +1428,10 @@
       case "init":
         timeoutMs = msg.timeoutMs;
         timeoutEnabled = msg.timeoutEnabled;
-        bindings = msg.bindings;
-        renderBindings();
         applyState(msg);
         focusCapture();
         break;
       case "state":
-        if (msg.bindings) {
-          bindings = msg.bindings;
-          renderBindings();
-        }
         applyState(msg);
         break;
       case "close":

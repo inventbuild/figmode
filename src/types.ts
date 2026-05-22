@@ -22,16 +22,17 @@ export type ValueKind =
   | "paddingAll";
 
 export interface ModeStackFrame {
-  mode: "layout";
+  mode: "layout" | "settings";
   submode?: "width" | "height" | "alignment" | "spacing" | "padding";
   valueKind?: ValueKind;
 }
 
 export interface FigmodeState {
   stack: ModeStackFrame[];
-  settingsOpen: boolean;
   valueBuffer: string;
   autoGap: boolean;
+  /** Draft key bindings while in settings mode; null when not editing. */
+  settingsDraft: KeyBinding[] | null;
 }
 
 export type BindingScope =
@@ -58,9 +59,9 @@ export type UiToPluginMessage =
   | { type: "keydown"; key: string }
   | { type: "timeout" }
   | { type: "close" }
-  | { type: "settings-close" }
-  | { type: "settings-reset" }
-  | { type: "settings-update"; bindingId: string; key: string };
+  | { type: "settings-draft-update"; bindingId: string; key: string }
+  | { type: "settings-draft-reset" }
+  | { type: "settings-save" };
 
 export type PluginToUiMessage =
   | {
@@ -114,4 +115,6 @@ export interface UiSpec {
   footer: UiKeyItem[];
   valueText?: string;
   height: number;
+  bindings?: KeyBinding[];
+  settingsDirty?: boolean;
 }

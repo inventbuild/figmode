@@ -1,10 +1,19 @@
 import { DEFAULT_TIMEOUT_MS, TIMEOUT_ENABLED } from "./types";
-import type { FigmodeState, KeyBinding, PluginToUiMessage, StackTransition, UiToPluginMessage, ValueKind } from "./types";
-import { loadBindings, resetBindings, saveBindingOverride } from "./settings";
+import type {
+  FigmodeState,
+  KeyBinding,
+  PluginToUiMessage,
+  StackTransition,
+  UiToPluginMessage,
+  ValueKind,
+} from "./types";
+import { loadBindings, saveAllBindings, createDefaultDraft } from "./settings";
 import {
   createInitialState,
+  enterSettings,
   getCurrentScope,
   getModeLabel,
+  inSettingsMode,
   inValueEntry,
   isAtRoot,
   popMode,
@@ -29,33 +38,66 @@ import {
   setActiveLayoutTarget,
 } from "./target";
 import { buildUiSpec, UI_LAYOUT_FRAME_HEIGHT, UI_WIDTH } from "./ui-spec";
+import { HUD_INSET, HUD_RESIZE_THRESHOLD } from "./hud-config";
 
 let state: FigmodeState = createInitialState();
 let bindings: KeyBinding[] = [];
 
-const HUD_INSET = 10;
 let lastHudHeight = 0;
+let anchorLeft = 0;
+let anchorBottom = 0;
 let previousStackDepth = 1;
-let previousSettingsOpen = false;
+let previousInSettings = false;
+
+function captureAnchor(): void {
+  const bounds = figma.viewport.bounds;
+  anchorLeft = bounds.x + HUD_INSET;
+  anchorBottom = bounds.y + bounds.height - HUD_INSET;
+}
 
 function hudPosition(height: number): { x: number; y: number } {
-  const bounds = figma.viewport.bounds;
   return {
-    x: bounds.x + HUD_INSET,
-    y: bounds.y + bounds.height - height - HUD_INSET,
+    x: anchorLeft,
+    y: anchorBottom - height,
   };
 }
 
+/** Resize and re-anchor only when height actually changes. */
 function syncHudFrame(height: number): void {
-  if (height <= 0) {
+  if (height <= 0 || height === lastHudHeight) {
     return;
   }
-  const heightChanged = height !== lastHudHeight;
-  if (heightChanged) {
-    figma.ui.resize(UI_WIDTH, height);
-    lastHudHeight = height;
-    const pos = hudPosition(height);
-    figma.ui.reposition(pos.x, pos.y);
+  figma.ui.resize(UI_WIDTH, height);
+  lastHudHeight = height;
+  const pos = hudPosition(height);
+  figma.ui.reposition(pos.x, pos.y);
+}
+
+function applyUiResize(height: number): void {
+  if (height <= 0 || !inSettingsMode(state)) {
+    return;
+  }
+  if (
+    lastHudHeight > 0 &&
+    Math.abs(height - lastHudHeight) <= HUD_RESIZE_THRESHOLD
+  ) {
+    return;
+  }
+  syncHudFrame(height);
+}
+
+function syncHudHeightFromUi(uiSpec: ReturnType<typeof buildUiSpec>): void {
+  const inSettings = inSettingsMode(state);
+  const justEntered = inSettings && !previousInSettings;
+  const justLeft = !inSettings && previousInSettings;
+
+  if (justLeft || !inSettings) {
+    syncHudFrame(layoutFrameHeight());
+    return;
+  }
+
+  if (justEntered) {
+    syncHudFrame(uiSpec.height);
   }
 }
 
@@ -64,9 +106,6 @@ function layoutFrameHeight(): number {
 }
 
 function getStackTransition(next: FigmodeState): StackTransition {
-  if (next.settingsOpen !== previousSettingsOpen) {
-    return "none";
-  }
   const depth = next.stack.length;
   if (depth > previousStackDepth) {
     return "push";
@@ -79,7 +118,7 @@ function getStackTransition(next: FigmodeState): StackTransition {
 
 function rememberStackState(next: FigmodeState): void {
   previousStackDepth = next.stack.length;
-  previousSettingsOpen = next.settingsOpen;
+  previousInSettings = inSettingsMode(next);
 }
 
 function postToUi(message: PluginToUiMessage): void {
@@ -89,8 +128,11 @@ function postToUi(message: PluginToUiMessage): void {
 function syncUi(): void {
   const uiSpec = buildUiSpec(state, bindings);
   const transition = getStackTransition(state);
-  if (transition === "none") {
-    syncHudFrame(state.settingsOpen ? uiSpec.height : layoutFrameHeight());
+  const inSettings = inSettingsMode(state);
+  const settingsBoundaryChanged = inSettings !== previousInSettings;
+
+  if (transition === "none" || settingsBoundaryChanged) {
+    syncHudHeightFromUi(uiSpec);
   }
   rememberStackState(state);
   postToUi({
@@ -192,7 +234,8 @@ function handleValueKey(key: string): FigmodeState {
     const step = key.startsWith("Shift+") ? 10 : 1;
     const delta = up ? step : -step;
     const current =
-      parseValueBuffer(state.valueBuffer) ?? getValueForKind(frame, top.valueKind);
+      parseValueBuffer(state.valueBuffer) ??
+      getValueForKind(frame, top.valueKind);
     const nextValue = Math.max(0, current + delta);
     const nextBuffer = String(nextValue);
     applyNumericValue(frame, top.valueKind, nextValue);
@@ -311,10 +354,21 @@ function runLayoutBinding(binding: KeyBinding): FigmodeState {
 }
 
 async function handleKeydown(key: string): Promise<void> {
-  if (state.settingsOpen) return;
-
   const scope = getCurrentScope(state.stack);
   const binding = findBindingForKey(bindings, scope, key);
+
+  if (inSettingsMode(state)) {
+    if (binding && isUniversalAction(binding)) {
+      if (binding.id === "any.pop") {
+        state = popMode(state);
+      } else if (binding.id === "any.close") {
+        closeFigmode();
+        return;
+      }
+      syncUi();
+    }
+    return;
+  }
 
   if (binding && isUniversalAction(binding)) {
     if (binding.id === "any.pop") {
@@ -327,7 +381,7 @@ async function handleKeydown(key: string): Promise<void> {
       closeFigmode();
       return;
     } else if (binding.id === "any.settings") {
-      state = { ...state, settingsOpen: true };
+      state = enterSettings(state, bindings);
     }
     syncUi();
     return;
@@ -348,7 +402,7 @@ async function handleKeydown(key: string): Promise<void> {
 async function initLayoutMode(): Promise<void> {
   const frame = prepareLayoutTarget();
   if (!frame) {
-    figma.notify("Select one or more objects to use Layout mode.");
+    figma.notify("Select one or more objects to use Figmode Layout.");
     closeFigmode();
     return;
   }
@@ -357,8 +411,9 @@ async function initLayoutMode(): Promise<void> {
   state = createInitialState();
   bindings = await loadBindings();
   previousStackDepth = state.stack.length;
-  previousSettingsOpen = state.settingsOpen;
+  previousInSettings = inSettingsMode(state);
 
+  captureAnchor();
   const frameHeight = layoutFrameHeight();
   lastHudHeight = frameHeight;
   figma.showUI(__html__, {
@@ -391,7 +446,7 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
       break;
     }
     case "ui-resize":
-      syncHudFrame(msg.height);
+      applyUiResize(msg.height);
       break;
     case "keydown":
       await handleKeydown(msg.key);
@@ -402,17 +457,34 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
     case "close":
       closeFigmode();
       break;
-    case "settings-close":
-      state = { ...state, settingsOpen: false };
-      syncUi();
+    case "settings-draft-update":
+      if (inSettingsMode(state) && state.settingsDraft) {
+        state = {
+          ...state,
+          settingsDraft: state.settingsDraft.map((binding) =>
+            binding.id === msg.bindingId
+              ? { ...binding, key: msg.key }
+              : binding,
+          ),
+        };
+        syncUi();
+      }
       break;
-    case "settings-reset":
-      bindings = await resetBindings();
-      syncUi();
+    case "settings-draft-reset":
+      if (inSettingsMode(state)) {
+        state = { ...state, settingsDraft: createDefaultDraft() };
+        syncUi();
+      }
       break;
-    case "settings-update":
-      bindings = await saveBindingOverride(msg.bindingId, msg.key);
-      syncUi();
+    case "settings-save":
+      if (inSettingsMode(state) && state.settingsDraft) {
+        bindings = await saveAllBindings(state.settingsDraft);
+        state = {
+          ...state,
+          settingsDraft: bindings.map((binding) => ({ ...binding })),
+        };
+        syncUi();
+      }
       break;
     default:
       break;

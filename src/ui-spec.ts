@@ -1,6 +1,7 @@
 import type { FigmodeState, KeyBinding, UiKeyItem, UiSpec } from "./types";
 import { groupBindingsByScope } from "./binding-scope";
-import { getCurrentScope, inValueEntry } from "./mode-stack";
+import { getCurrentScope, inSettingsMode, inValueEntry } from "./mode-stack";
+import { bindingsMatchSaved } from "./settings";
 
 /** Fixed HUD width — sized for the alignment grid (widest view). */
 export const UI_WIDTH = 340;
@@ -65,12 +66,20 @@ function bindingsForScope(bindings: KeyBinding[], scope: string): KeyBinding[] {
   return bindings.filter((binding) => binding.scope === scope);
 }
 
-function footerKeys(bindings: KeyBinding[]): UiKeyItem[] {
+function footerKeys(
+  bindings: KeyBinding[],
+  options: { includeSettings?: boolean } = {},
+): UiKeyItem[] {
+  const { includeSettings = true } = options;
   const pop = bindings.find((b) => b.id === "any.pop");
   const close = bindings.find((b) => b.id === "any.close");
+  const settings = bindings.find((b) => b.id === "any.settings");
   const items: UiKeyItem[] = [];
   if (pop) items.push({ key: displayKey(pop.key), label: "Back" });
   if (close) items.push({ key: displayKey(close.key), label: "Quit" });
+  if (includeSettings && settings) {
+    items.push({ key: displayKey(settings.key), label: "Settings" });
+  }
   return items;
 }
 
@@ -81,10 +90,16 @@ function getBreadcrumb(state: FigmodeState): string[] {
   if (top.valueKind) {
     const submode = top.submode ?? "spacing";
     const crumbs = ["Layout", submode];
-    if (top.valueKind === "gap" || top.valueKind === "width" || top.valueKind === "height") {
+    if (
+      top.valueKind === "gap" ||
+      top.valueKind === "width" ||
+      top.valueKind === "height"
+    ) {
       crumbs.push("value");
     } else {
-      crumbs.push(top.valueKind.replace(/^padding/, "").toLowerCase() || "value");
+      crumbs.push(
+        top.valueKind.replace(/^padding/, "").toLowerCase() || "value",
+      );
     }
     return crumbs;
   }
@@ -113,12 +128,27 @@ const LAYOUT_RIGHT_ORDER = [
 ];
 
 const ALIGNMENT_GRID = [
-  ["layout.alignment.topLeft", "layout.alignment.topCenter", "layout.alignment.topRight"],
-  ["layout.alignment.middleLeft", "layout.alignment.middleCenter", "layout.alignment.middleRight"],
-  ["layout.alignment.bottomLeft", "layout.alignment.bottomCenter", "layout.alignment.bottomRight"],
+  [
+    "layout.alignment.topLeft",
+    "layout.alignment.topCenter",
+    "layout.alignment.topRight",
+  ],
+  [
+    "layout.alignment.middleLeft",
+    "layout.alignment.middleCenter",
+    "layout.alignment.middleRight",
+  ],
+  [
+    "layout.alignment.bottomLeft",
+    "layout.alignment.bottomCenter",
+    "layout.alignment.bottomRight",
+  ],
 ];
 
-function bindingById(bindings: KeyBinding[], id: string): KeyBinding | undefined {
+function bindingById(
+  bindings: KeyBinding[],
+  id: string,
+): KeyBinding | undefined {
   return bindings.find((binding) => binding.id === id);
 }
 
@@ -133,16 +163,22 @@ function orderedKeys(
     .map((binding) => toUiKey(binding, modePush));
 }
 
-export function buildUiSpec(state: FigmodeState, bindings: KeyBinding[]): UiSpec {
+export function buildUiSpec(
+  state: FigmodeState,
+  bindings: KeyBinding[],
+): UiSpec {
   const footer = footerKeys(bindings);
   const breadcrumb = getBreadcrumb(state);
 
-  if (state.settingsOpen) {
+  if (inSettingsMode(state)) {
+    const draft = state.settingsDraft ?? bindings;
     return {
       layout: "settings",
       breadcrumb: ["Settings"],
-      footer,
-      height: settingsHeight(bindings),
+      footer: footerKeys(bindings, { includeSettings: false }),
+      bindings: draft,
+      settingsDirty: !bindingsMatchSaved(draft, bindings),
+      height: settingsHeight(draft),
     };
   }
 
@@ -196,13 +232,19 @@ export function buildUiSpec(state: FigmodeState, bindings: KeyBinding[]): UiSpec
 
   if (scope === "layout.padding") {
     const columns: UiKeyItem[][] = [
-      orderedKeys(bindings, ["layout.padding.paddingX", "layout.padding.paddingLeft"]),
+      orderedKeys(bindings, [
+        "layout.padding.paddingX",
+        "layout.padding.paddingLeft",
+      ]),
       orderedKeys(bindings, [
         "layout.padding.paddingTop",
         "layout.padding.all",
         "layout.padding.paddingBottom",
       ]),
-      orderedKeys(bindings, ["layout.padding.paddingY", "layout.padding.paddingRight"]),
+      orderedKeys(bindings, [
+        "layout.padding.paddingY",
+        "layout.padding.paddingRight",
+      ]),
     ];
     return {
       layout: "paddingGrid",

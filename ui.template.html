@@ -190,20 +190,16 @@
         height: 0;
       }
 
-      .settings {
-        display: none;
+      .settings-view {
+        display: flex;
         flex-direction: column;
         gap: 8px;
       }
 
-      .settings.open {
+      .binding-list {
         display: flex;
-      }
-
-      .settings h2 {
-        margin: 0;
-        font-size: 12px;
-        font-weight: 700;
+        flex-direction: column;
+        gap: 0;
       }
 
       .binding-row {
@@ -270,10 +266,6 @@
       .confirm.open {
         display: flex;
       }
-
-      .panel.hidden {
-        display: none;
-      }
     </style>
   </head>
   <body>
@@ -293,20 +285,6 @@
       </div>
       <hr class="divider" />
       <div id="footer-host"></div>
-    </div>
-
-    <div id="settings" class="settings">
-      <h2>Settings</h2>
-      <div id="binding-list"></div>
-      <div class="settings-actions">
-        <button id="reset-bindings" type="button">Reset to defaults</button>
-        <button id="close-settings" type="button" class="primary">Done</button>
-      </div>
-      <div id="confirm-reset" class="confirm">
-        <span>Reset all key bindings?</span>
-        <button id="confirm-reset-yes" type="button" class="primary">Yes</button>
-        <button id="confirm-reset-no" type="button">No</button>
-      </div>
     </div>
 
     <div id="error" class="error"></div>

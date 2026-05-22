@@ -14,10 +14,7 @@ const breadcrumbHost = document.getElementById("breadcrumb-host") as HTMLDivElem
 const stackViewport = document.getElementById("stack-viewport") as HTMLDivElement;
 const stackStage = document.getElementById("stack-stage") as HTMLDivElement;
 const footerHost = document.getElementById("footer-host") as HTMLDivElement;
-const settings = document.getElementById("settings") as HTMLDivElement;
 const errorEl = document.getElementById("error") as HTMLDivElement;
-const bindingList = document.getElementById("binding-list") as HTMLDivElement;
-const confirmReset = document.getElementById("confirm-reset") as HTMLDivElement;
 
 const BODY_PADDING = 14;
 const STACK_DURATION = 0.22;
@@ -26,10 +23,10 @@ const STACK_EASING = [0.2, 0, 0, 1] as [number, number, number, number];
 let timeoutMs = 1000;
 let timeoutEnabled = true;
 let timeoutId: ReturnType<typeof setTimeout> | null = null;
-let settingsOpen = false;
-let bindings: KeyBinding[] = [];
+let inSettings = false;
 let recordingBindingId: string | null = null;
 let lastReportedHeight = 0;
+let reportSizeFrameId: number | null = null;
 let stackAnimating = false;
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -38,21 +35,26 @@ function post(message: UiToPluginMessage): void {
 }
 
 function measurePanelHeight(): number {
-  const content = settingsOpen ? settings : panel;
-  return Math.ceil(content.offsetHeight + errorEl.offsetHeight + BODY_PADDING);
+  return Math.ceil(panel.offsetHeight + errorEl.offsetHeight + BODY_PADDING);
 }
 
 function reportSize(): void {
-  if (!settingsOpen) {
+  if (!inSettings) {
     return;
   }
-  requestAnimationFrame(() => {
-    const height = measurePanelHeight();
-    if (height <= 0 || height === lastReportedHeight) {
-      return;
-    }
-    lastReportedHeight = height;
-    post({ type: "ui-resize", height });
+  if (reportSizeFrameId !== null) {
+    cancelAnimationFrame(reportSizeFrameId);
+  }
+  reportSizeFrameId = requestAnimationFrame(() => {
+    reportSizeFrameId = requestAnimationFrame(() => {
+      reportSizeFrameId = null;
+      const height = measurePanelHeight();
+      if (height <= 0 || height === lastReportedHeight) {
+        return;
+      }
+      lastReportedHeight = height;
+      post({ type: "ui-resize", height });
+    });
   });
 }
 
@@ -89,7 +91,7 @@ function clearTimer(): void {
 
 function armTimer(): void {
   clearTimer();
-  if (!timeoutEnabled || settingsOpen) return;
+  if (!timeoutEnabled || inSettings) return;
   timeoutId = setTimeout(() => post({ type: "timeout" }), timeoutMs);
 }
 
@@ -130,8 +132,100 @@ function renderFooter(footer: UiSpec["footer"]): HTMLDivElement {
   return wrap;
 }
 
+function renderBindingRows(bindings: KeyBinding[]): HTMLDivElement {
+  const list = el("div", "binding-list");
+  const groups = groupBindingsByScope(bindings);
+  groups.forEach((group, index) => {
+    if (index > 0) {
+      const divider = document.createElement("hr");
+      divider.className = "settings-divider";
+      list.appendChild(divider);
+    }
+
+    for (const binding of group.items) {
+      const row = document.createElement("div");
+      row.className = "binding-row";
+
+      const label = document.createElement("label");
+      const path = bindingFullPath(binding.scope, binding.label);
+      label.textContent = path;
+      label.title = path;
+
+      const input = document.createElement("input");
+      input.value = binding.key;
+      input.readOnly = true;
+      input.dataset.bindingId = binding.id;
+      input.addEventListener("focus", () => {
+        recordingBindingId = binding.id;
+        input.value = "Press a key…";
+      });
+      input.addEventListener("blur", () => {
+        if (recordingBindingId === binding.id) {
+          recordingBindingId = null;
+          input.value = binding.key;
+        }
+      });
+
+      row.append(label, input);
+      list.appendChild(row);
+    }
+  });
+  return list;
+}
+
+function buildSettingsView(uiSpec: UiSpec): HTMLDivElement {
+  const wrap = el("div", "settings-view");
+  wrap.appendChild(renderBindingRows(uiSpec.bindings || []));
+
+  const actions = el("div", "settings-actions");
+  const resetButton = el("button", undefined, "Reset to defaults");
+  resetButton.type = "button";
+  resetButton.id = "reset-bindings";
+
+  const saveButton = el("button", "primary", "Save");
+  saveButton.type = "button";
+  saveButton.id = "save-bindings";
+  saveButton.hidden = !uiSpec.settingsDirty;
+
+  actions.append(resetButton, saveButton);
+  wrap.appendChild(actions);
+
+  const confirm = el("div", "confirm");
+  confirm.id = "confirm-reset";
+  confirm.appendChild(el("span", undefined, "Reset all key bindings?"));
+  const yes = el("button", "primary", "Yes");
+  yes.type = "button";
+  yes.id = "confirm-reset-yes";
+  const no = el("button", undefined, "No");
+  no.type = "button";
+  no.id = "confirm-reset-no";
+  confirm.append(yes, no);
+  wrap.appendChild(confirm);
+
+  resetButton.onclick = () => {
+    confirm.classList.add("open");
+  };
+  yes.onclick = () => {
+    post({ type: "settings-draft-reset" });
+    confirm.classList.remove("open");
+  };
+  no.onclick = () => {
+    confirm.classList.remove("open");
+  };
+  saveButton.onclick = () => {
+    post({ type: "settings-save" });
+  };
+
+  return wrap;
+}
+
 function buildContent(uiSpec: UiSpec): HTMLDivElement {
   const content = el("div", "stack-content");
+
+  if (uiSpec.layout === "settings") {
+    content.appendChild(buildSettingsView(uiSpec));
+    return content;
+  }
 
   if (uiSpec.layout === "twoColumn") {
     const cols = el("div", "columns-two");
@@ -196,6 +290,7 @@ function finishStackTransition(fromLayer: HTMLElement | null): void {
     fromLayer.remove();
   }
   stackAnimating = false;
+  reportSize();
 }
 
 async function animateStackTransition(
@@ -258,6 +353,7 @@ function setStackContent(uiSpec: UiSpec, transition: StackTransition): void {
   if (!canAnimate) {
     stackStage.replaceChildren();
     mountStackLayer(nextContent);
+    reportSize();
     return;
   }
 
@@ -269,76 +365,26 @@ function setStackContent(uiSpec: UiSpec, transition: StackTransition): void {
     .catch(() => finishStackTransition(currentLayer));
 }
 
-function renderUiSpec(uiSpec: UiSpec, transition: StackTransition): void {
-  setStackContent(uiSpec, transition);
-}
-
-function renderBindings(): void {
-  bindingList.replaceChildren();
-  const groups = groupBindingsByScope(bindings);
-  groups.forEach((group, index) => {
-    if (index > 0) {
-      const divider = document.createElement("hr");
-      divider.className = "settings-divider";
-      bindingList.appendChild(divider);
-    }
-
-    for (const binding of group.items) {
-      const row = document.createElement("div");
-      row.className = "binding-row";
-
-      const label = document.createElement("label");
-      const path = bindingFullPath(binding.scope, binding.label);
-      label.textContent = path;
-      label.title = path;
-
-      const input = document.createElement("input");
-      input.value = binding.key;
-      input.readOnly = true;
-      input.dataset.bindingId = binding.id;
-      input.addEventListener("focus", () => {
-        recordingBindingId = binding.id;
-        input.value = "Press a key…";
-      });
-      input.addEventListener("blur", () => {
-        if (recordingBindingId === binding.id) {
-          recordingBindingId = null;
-          input.value = binding.key;
-        }
-      });
-
-      row.append(label, input);
-      bindingList.appendChild(row);
-    }
-  });
-  reportSize();
-}
-
 function applyState(payload: Extract<PluginToUiMessage, { type: "init" | "state" }>): void {
-  settingsOpen = payload.state.settingsOpen;
+  inSettings = payload.state.stack[payload.state.stack.length - 1]?.mode === "settings";
   errorEl.textContent = "";
 
-  if (payload.uiSpec && !settingsOpen) {
+  if (payload.uiSpec) {
     renderUiSpec(payload.uiSpec, payload.transition || "none");
   }
 
-  if (settingsOpen) {
-    panel.classList.add("hidden");
-    settings.classList.add("open");
+  if (inSettings) {
     clearTimer();
     lastReportedHeight = 0;
     reportSize();
   } else {
-    panel.classList.remove("hidden");
-    settings.classList.remove("open");
-    confirmReset.classList.remove("open");
     armTimer();
     focusCapture();
-    if (payload.transition === "none") {
-      lastReportedHeight = 0;
-      reportSize();
-    }
   }
+}
+
+function renderUiSpec(uiSpec: UiSpec, transition: StackTransition): void {
+  setStackContent(uiSpec, transition);
 }
 
 capture.addEventListener("keydown", (event) => {
@@ -349,7 +395,7 @@ capture.addEventListener("keydown", (event) => {
     const key = formatKeyFromEvent(event);
     if (["Control", "Alt", "Shift", "Meta"].includes(event.key)) return;
     post({
-      type: "settings-update",
+      type: "settings-draft-update",
       bindingId: recordingBindingId,
       key,
     });
@@ -358,34 +404,19 @@ capture.addEventListener("keydown", (event) => {
     return;
   }
 
-  if (settingsOpen) return;
-
   const key = formatKeyFromEvent(event);
   if (!key || ["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
+    return;
+  }
+
+  if (inSettings) {
+    post({ type: "keydown", key });
     return;
   }
 
   post({ type: "keydown", key });
   armTimer();
 });
-
-document.getElementById("close-settings")!.onclick = () => {
-  post({ type: "settings-close" });
-  focusCapture();
-};
-
-document.getElementById("reset-bindings")!.onclick = () => {
-  confirmReset.classList.add("open");
-};
-
-document.getElementById("confirm-reset-yes")!.onclick = () => {
-  post({ type: "settings-reset" });
-  confirmReset.classList.remove("open");
-};
-
-document.getElementById("confirm-reset-no")!.onclick = () => {
-  confirmReset.classList.remove("open");
-};
 
 window.addEventListener("blur", () => {
   window.setTimeout(() => {
@@ -403,16 +434,10 @@ window.onmessage = (event: MessageEvent) => {
     case "init":
       timeoutMs = msg.timeoutMs;
       timeoutEnabled = msg.timeoutEnabled;
-      bindings = msg.bindings;
-      renderBindings();
       applyState(msg);
       focusCapture();
       break;
     case "state":
-      if (msg.bindings) {
-        bindings = msg.bindings;
-        renderBindings();
-      }
       applyState(msg);
       break;
     case "close":
