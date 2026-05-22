@@ -83,6 +83,16 @@ function footerKeys(
   return items;
 }
 
+const PADDING_VALUE_CRUMB: Partial<Record<string, string>> = {
+  paddingTop: "Top",
+  paddingLeft: "Left",
+  paddingRight: "Right",
+  paddingBottom: "Bottom",
+  paddingX: "Horizontal",
+  paddingY: "Vertical",
+  paddingAll: "All",
+};
+
 function getBreadcrumb(state: FigmodeState): string[] {
   const top = state.stack[state.stack.length - 1];
   if (!top) return ["Layout"];
@@ -97,9 +107,7 @@ function getBreadcrumb(state: FigmodeState): string[] {
     ) {
       crumbs.push("value");
     } else {
-      crumbs.push(
-        top.valueKind.replace(/^padding/, "").toLowerCase() || "value",
-      );
+      crumbs.push(PADDING_VALUE_CRUMB[top.valueKind] ?? "value");
     }
     return crumbs;
   }
@@ -183,18 +191,21 @@ export function buildUiSpec(
   }
 
   if (inValueEntry(state)) {
-    const valueKeys: UiKeyItem[] = [
-      { key: "0-9", label: "Type a value" },
+    const valueLeft: UiKeyItem[] = [
+      { key: "0-9", label: "Enter value" },
       { key: "↑", label: "Increment (+1)" },
-      { key: "shift+↑", label: "Increment (+10)" },
       { key: "↓", label: "Decrement (-1)" },
-      { key: "shift+↓", label: "Decrement (-10)" },
+    ];
+    const valueRight: UiKeyItem[] = [
       { key: "enter", label: "Confirm" },
+      { key: "shift+↑", label: "Increment (+10)" },
+      { key: "shift+↓", label: "Decrement (-10)" },
     ];
     return {
       layout: "value",
       breadcrumb,
-      items: valueKeys,
+      left: valueLeft,
+      right: valueRight,
       footer,
       valueText: state.valueBuffer,
       height: UI_HEIGHT.value,

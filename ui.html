@@ -6,11 +6,6 @@
     <style>
       :root {
         color-scheme: light dark;
-        --fm-white: #ffffff;
-        --fm-black: #000000;
-        --fm-gray: #bfbfbf;
-        --fm-dark-gray: #64696e;
-        --fm-light-gray: #d7d7d7;
         font-family: Inter, system-ui, -apple-system, sans-serif;
       }
 
@@ -26,8 +21,8 @@
       body {
         margin: 0;
         padding: 7px;
-        background: var(--figma-color-bg, var(--fm-white));
-        color: var(--figma-color-text, var(--fm-black));
+        background: var(--figma-color-bg);
+        color: var(--figma-color-text);
         font-size: 12px;
         line-height: normal;
       }
@@ -55,7 +50,7 @@
       .stack-layer {
         grid-area: 1 / 1;
         min-width: 0;
-        background: var(--figma-color-bg, var(--fm-white));
+        background: var(--figma-color-bg);
       }
 
       .stack-layer.is-front {
@@ -67,7 +62,7 @@
       }
 
       .divider {
-        background: var(--fm-gray);
+        background: var(--figma-color-border);
         height: 1px;
         border: 0;
         margin: 0;
@@ -78,7 +73,7 @@
         display: flex;
         align-items: center;
         gap: 5px;
-        color: var(--fm-dark-gray);
+        color: var(--figma-color-text-secondary);
         font-size: 10px;
         font-weight: 400;
         text-transform: uppercase;
@@ -95,7 +90,7 @@
         display: block;
         font-size: 10px;
         line-height: 8px;
-        color: var(--fm-dark-gray);
+        color: var(--figma-color-text-secondary);
       }
 
       .key-row {
@@ -105,9 +100,9 @@
       }
 
       .key-pill {
-        background: var(--fm-light-gray);
+        background: var(--figma-color-bg-tertiary);
         border-radius: 5px;
-        color: var(--fm-black);
+        color: var(--figma-color-text);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -120,7 +115,7 @@
       }
 
       .key-label {
-        color: var(--fm-black);
+        color: var(--figma-color-text);
         font-size: 12px;
         font-weight: 400;
         white-space: nowrap;
@@ -168,16 +163,36 @@
         align-items: flex-start;
       }
 
-      .value-display {
-        color: var(--fm-black);
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 12px;
+      .value-mode {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        align-items: flex-start;
+      }
+
+      .value-input {
+        border: 1px solid var(--figma-color-border);
+        border-radius: 10px;
+        padding: 6px 12px;
+        font-family: Inter, system-ui, -apple-system, sans-serif;
+        font-size: 18px;
         font-weight: 400;
-        min-height: 16px;
+        line-height: normal;
+        color: var(--figma-color-text);
+        background: var(--figma-color-bg);
+        align-self: flex-start;
+        min-width: 0;
+        width: auto;
+        caret-color: var(--figma-color-text);
+        outline: none;
+      }
+
+      .value-input:focus {
+        border-color: var(--figma-color-border-selected);
       }
 
       .error {
-        color: var(--figma-color-text-danger, #f24822);
+        color: var(--figma-color-text-danger);
         font-size: 11px;
         min-height: 14px;
       }
@@ -213,10 +228,11 @@
         font-size: 11px;
         line-height: 1.3;
         white-space: normal;
+        color: var(--figma-color-text);
       }
 
       .settings-divider {
-        background: var(--fm-gray);
+        background: var(--figma-color-border);
         height: 1px;
         border: 0;
         margin: 4px 0;
@@ -228,10 +244,10 @@
         font: inherit;
         font-size: 11px;
         padding: 2px 4px;
-        border: 1px solid var(--figma-color-border, var(--fm-gray));
+        border: 1px solid var(--figma-color-border);
         border-radius: 4px;
-        background: var(--figma-color-bg, var(--fm-white));
-        color: var(--figma-color-text, var(--fm-black));
+        background: var(--figma-color-bg);
+        color: var(--figma-color-text);
       }
 
       .settings-actions {
@@ -243,16 +259,16 @@
         font: inherit;
         font-size: 11px;
         padding: 4px 8px;
-        border: 1px solid var(--figma-color-border, var(--fm-gray));
+        border: 1px solid var(--figma-color-border);
         border-radius: 4px;
-        background: var(--figma-color-bg-secondary, var(--fm-light-gray));
-        color: var(--figma-color-text, var(--fm-black));
+        background: var(--figma-color-bg-secondary);
+        color: var(--figma-color-text);
         cursor: pointer;
       }
 
       button.primary {
-        background: var(--figma-color-bg-brand, var(--fm-black));
-        color: var(--figma-color-text-onbrand, var(--fm-white));
+        background: var(--figma-color-bg-brand);
+        color: var(--figma-color-text-onbrand);
         border-color: transparent;
       }
 
@@ -261,6 +277,7 @@
         gap: 6px;
         align-items: center;
         font-size: 11px;
+        color: var(--figma-color-text);
       }
 
       .confirm.open {
@@ -1085,6 +1102,7 @@
   var timeoutEnabled = true;
   var timeoutId = null;
   var inSettings = false;
+  var inValueMode = false;
   var recordingBindingId = null;
   var lastReportedHeight = 0;
   var reportSizeFrameId = null;
@@ -1131,7 +1149,17 @@
     }
     return parts.join("+");
   }
-  function focusCapture() {
+  function focusKeyTarget() {
+    if (inSettings) {
+      return;
+    }
+    const valueInput = document.getElementById("value-input");
+    if (inValueMode && valueInput) {
+      valueInput.focus({ preventScroll: true });
+      const length = valueInput.value.length;
+      valueInput.setSelectionRange(length, length);
+      return;
+    }
     capture.focus({ preventScroll: true });
   }
   function clearTimer() {
@@ -1279,12 +1307,24 @@
       });
       content.appendChild(cols);
     } else if (uiSpec.layout === "value") {
-      const value = el("div", "value-display");
-      value.textContent = (_a = uiSpec.valueText) != null ? _a : "";
-      content.appendChild(value);
-      const list = el("div", "list");
-      (uiSpec.items || []).forEach((item) => list.appendChild(renderKeyRow(item)));
-      content.appendChild(list);
+      const wrap2 = el("div", "value-mode");
+      const input = document.createElement("input");
+      input.type = "text";
+      input.id = "value-input";
+      input.className = "value-input";
+      input.readOnly = true;
+      input.inputMode = "numeric";
+      input.setAttribute("aria-label", "Numeric value");
+      input.value = (_a = uiSpec.valueText) != null ? _a : "";
+      input.addEventListener("keydown", handlePluginKeydown);
+      const cols = el("div", "columns-two");
+      const left = el("div", "column");
+      const right = el("div", "column");
+      (uiSpec.left || []).forEach((item) => left.appendChild(renderKeyRow(item)));
+      (uiSpec.right || []).forEach((item) => right.appendChild(renderKeyRow(item)));
+      cols.append(left, right);
+      wrap2.append(input, cols);
+      content.appendChild(wrap2);
     } else if ((_b = uiSpec.items) == null ? void 0 : _b.length) {
       const list = el("div", "list");
       uiSpec.items.forEach((item) => list.appendChild(renderKeyRow(item)));
@@ -1316,6 +1356,7 @@
     }
     stackAnimating = false;
     reportSize();
+    focusKeyTarget();
   }
   async function animateStackTransition(transition, currentLayer, nextLayer) {
     resetLayerStyles(currentLayer);
@@ -1363,6 +1404,7 @@
       stackStage.replaceChildren();
       mountStackLayer(nextContent);
       reportSize();
+      focusKeyTarget();
       return;
     }
     stackAnimating = true;
@@ -1370,8 +1412,9 @@
     void animateStackTransition(transition, currentLayer, nextLayer).then(() => finishStackTransition(currentLayer)).catch(() => finishStackTransition(currentLayer));
   }
   function applyState(payload) {
-    var _a;
-    inSettings = ((_a = payload.state.stack[payload.state.stack.length - 1]) == null ? void 0 : _a.mode) === "settings";
+    const top = payload.state.stack[payload.state.stack.length - 1];
+    inSettings = (top == null ? void 0 : top.mode) === "settings";
+    inValueMode = Boolean(top == null ? void 0 : top.valueKind);
     errorEl.textContent = "";
     if (payload.uiSpec) {
       renderUiSpec(payload.uiSpec, payload.transition || "none");
@@ -1382,13 +1425,13 @@
       reportSize();
     } else {
       armTimer();
-      focusCapture();
+      focusKeyTarget();
     }
   }
   function renderUiSpec(uiSpec, transition) {
     setStackContent(uiSpec, transition);
   }
-  capture.addEventListener("keydown", (event) => {
+  function handlePluginKeydown(event) {
     event.preventDefault();
     event.stopPropagation();
     if (recordingBindingId) {
@@ -1413,7 +1456,8 @@
     }
     post({ type: "keydown", key });
     armTimer();
-  });
+  }
+  capture.addEventListener("keydown", handlePluginKeydown);
   window.addEventListener("blur", () => {
     window.setTimeout(() => {
       if (!document.hasFocus()) {
@@ -1429,7 +1473,7 @@
         timeoutMs = msg.timeoutMs;
         timeoutEnabled = msg.timeoutEnabled;
         applyState(msg);
-        focusCapture();
+        focusKeyTarget();
         break;
       case "state":
         applyState(msg);
@@ -1440,14 +1484,14 @@
       case "error":
         errorEl.textContent = msg.message;
         armTimer();
-        focusCapture();
+        focusKeyTarget();
         break;
       default:
         break;
     }
   };
   post({ type: "ready" });
-  focusCapture();
+  focusKeyTarget();
 })();
 </script>
   </body>

@@ -24,6 +24,7 @@ let timeoutMs = 1000;
 let timeoutEnabled = true;
 let timeoutId: ReturnType<typeof setTimeout> | null = null;
 let inSettings = false;
+let inValueMode = false;
 let recordingBindingId: string | null = null;
 let lastReportedHeight = 0;
 let reportSizeFrameId: number | null = null;
@@ -78,7 +79,17 @@ function formatKeyFromEvent(event: KeyboardEvent): string {
   return parts.join("+");
 }
 
-function focusCapture(): void {
+function focusKeyTarget(): void {
+  if (inSettings) {
+    return;
+  }
+  const valueInput = document.getElementById("value-input") as HTMLInputElement | null;
+  if (inValueMode && valueInput) {
+    valueInput.focus({ preventScroll: true });
+    const length = valueInput.value.length;
+    valueInput.setSelectionRange(length, length);
+    return;
+  }
   capture.focus({ preventScroll: true });
 }
 
@@ -250,12 +261,27 @@ function buildContent(uiSpec: UiSpec): HTMLDivElement {
     });
     content.appendChild(cols);
   } else if (uiSpec.layout === "value") {
-    const value = el("div", "value-display");
-    value.textContent = uiSpec.valueText ?? "";
-    content.appendChild(value);
-    const list = el("div", "list");
-    (uiSpec.items || []).forEach((item) => list.appendChild(renderKeyRow(item)));
-    content.appendChild(list);
+    const wrap = el("div", "value-mode");
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.id = "value-input";
+    input.className = "value-input";
+    input.readOnly = true;
+    input.inputMode = "numeric";
+    input.setAttribute("aria-label", "Numeric value");
+    input.value = uiSpec.valueText ?? "";
+    input.addEventListener("keydown", handlePluginKeydown);
+
+    const cols = el("div", "columns-two");
+    const left = el("div", "column");
+    const right = el("div", "column");
+    (uiSpec.left || []).forEach((item) => left.appendChild(renderKeyRow(item)));
+    (uiSpec.right || []).forEach((item) => right.appendChild(renderKeyRow(item)));
+    cols.append(left, right);
+
+    wrap.append(input, cols);
+    content.appendChild(wrap);
   } else if (uiSpec.items?.length) {
     const list = el("div", "list");
     uiSpec.items.forEach((item) => list.appendChild(renderKeyRow(item)));
@@ -291,6 +317,7 @@ function finishStackTransition(fromLayer: HTMLElement | null): void {
   }
   stackAnimating = false;
   reportSize();
+  focusKeyTarget();
 }
 
 async function animateStackTransition(
@@ -354,6 +381,7 @@ function setStackContent(uiSpec: UiSpec, transition: StackTransition): void {
     stackStage.replaceChildren();
     mountStackLayer(nextContent);
     reportSize();
+    focusKeyTarget();
     return;
   }
 
@@ -366,7 +394,9 @@ function setStackContent(uiSpec: UiSpec, transition: StackTransition): void {
 }
 
 function applyState(payload: Extract<PluginToUiMessage, { type: "init" | "state" }>): void {
-  inSettings = payload.state.stack[payload.state.stack.length - 1]?.mode === "settings";
+  const top = payload.state.stack[payload.state.stack.length - 1];
+  inSettings = top?.mode === "settings";
+  inValueMode = Boolean(top?.valueKind);
   errorEl.textContent = "";
 
   if (payload.uiSpec) {
@@ -379,7 +409,7 @@ function applyState(payload: Extract<PluginToUiMessage, { type: "init" | "state"
     reportSize();
   } else {
     armTimer();
-    focusCapture();
+    focusKeyTarget();
   }
 }
 
@@ -387,7 +417,7 @@ function renderUiSpec(uiSpec: UiSpec, transition: StackTransition): void {
   setStackContent(uiSpec, transition);
 }
 
-capture.addEventListener("keydown", (event) => {
+function handlePluginKeydown(event: KeyboardEvent): void {
   event.preventDefault();
   event.stopPropagation();
 
@@ -416,7 +446,9 @@ capture.addEventListener("keydown", (event) => {
 
   post({ type: "keydown", key });
   armTimer();
-});
+}
+
+capture.addEventListener("keydown", handlePluginKeydown);
 
 window.addEventListener("blur", () => {
   window.setTimeout(() => {
@@ -435,7 +467,7 @@ window.onmessage = (event: MessageEvent) => {
       timeoutMs = msg.timeoutMs;
       timeoutEnabled = msg.timeoutEnabled;
       applyState(msg);
-      focusCapture();
+      focusKeyTarget();
       break;
     case "state":
       applyState(msg);
@@ -446,7 +478,7 @@ window.onmessage = (event: MessageEvent) => {
     case "error":
       errorEl.textContent = msg.message;
       armTimer();
-      focusCapture();
+      focusKeyTarget();
       break;
     default:
       break;
@@ -454,4 +486,4 @@ window.onmessage = (event: MessageEvent) => {
 };
 
 post({ type: "ready" });
-focusCapture();
+focusKeyTarget();
