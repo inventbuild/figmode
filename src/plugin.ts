@@ -45,14 +45,15 @@ import {
   setActiveLayoutTarget,
 } from "./target";
 import type { LayoutTarget } from "./target";
-import { buildUiSpec, UI_LAYOUT_FRAME_HEIGHT, UI_WIDTH } from "./ui-spec";
-import { HUD_RESIZE_THRESHOLD, DEFAULT_HUD_INSET } from "./hud-config";
+import { buildUiSpec, UI_FRAME_HEIGHT, UI_WIDTH } from "./ui-spec";
+import { DEFAULT_HUD_INSET } from "./hud-config";
 import {
   clearHudPosition,
-  clampHudPosition,
   defaultHudPosition,
+  fromViewportRelative,
   loadHudPosition,
   saveHudPosition,
+  toViewportRelative,
 } from "./hud-position";
 import type { HudPoint } from "./hud-position";
 
@@ -61,12 +62,11 @@ const POSITION_EPSILON = 2;
 let state: FigmodeState = createInitialState();
 let bindings: KeyBinding[] = [];
 
-let lastHudHeight = 0;
 let hudX = 0;
 let hudY = 0;
 let hudUsesCustomPosition = false;
+let hudUiShown = false;
 let previousStackDepth = 1;
-let previousInSettings = false;
 let lastTrackedHudPos: { x: number; y: number } | null = null;
 let hudPositionTrackTimer: ReturnType<typeof setInterval> | null = null;
 let refocusAfterMoveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -76,60 +76,28 @@ function applyHudPosition(height: number): { x: number; y: number } {
     const point = defaultHudPosition(height, DEFAULT_HUD_INSET);
     hudX = point.x;
     hudY = point.y;
-  } else {
-    const clamped = clampHudPosition(hudX, hudY, UI_WIDTH, height);
-    hudX = clamped.x;
-    hudY = clamped.y;
   }
   return { x: hudX, y: hudY };
 }
 
-function repositionHud(height = lastHudHeight || layoutFrameHeight()): void {
+function contentHeight(): number {
+  return UI_FRAME_HEIGHT;
+}
+
+function repositionHud(height = contentHeight()): void {
   const pos = applyHudPosition(height);
   figma.ui.reposition(pos.x, pos.y);
 }
 
-/** If the user moved the native plugin window, stop bottom-anchoring resizes. */
-function noteUserMovedHud(height: number): void {
-  if (hudUsesCustomPosition) {
-    return;
-  }
-  const { canvasSpace } = figma.ui.getPosition();
-  const expected = defaultHudPosition(height, DEFAULT_HUD_INSET);
-  if (
-    Math.abs(canvasSpace.x - expected.x) > 1 ||
-    Math.abs(canvasSpace.y - expected.y) > 1
-  ) {
-    hudUsesCustomPosition = true;
-    hudX = canvasSpace.x;
-    hudY = canvasSpace.y;
-  }
-}
-
-function ensureHudInViewport(contentHeight: number): void {
-  const { canvasSpace } = figma.ui.getPosition();
-  const clamped = clampHudPosition(
-    canvasSpace.x,
-    canvasSpace.y,
-    UI_WIDTH,
-    contentHeight,
-  );
-  if (
-    clamped.x !== canvasSpace.x ||
-    clamped.y !== canvasSpace.y
-  ) {
-    hudX = clamped.x;
-    hudY = clamped.y;
-    figma.ui.reposition(hudX, hudY);
-  }
+function roundHudPoint(point: HudPoint): HudPoint {
+  return { x: Math.round(point.x), y: Math.round(point.y) };
 }
 
 async function saveCurrentHudPosition(): Promise<void> {
-  const contentHeight = lastHudHeight || layoutFrameHeight();
-  const clamped = clampHudPosition(hudX, hudY, UI_WIDTH, contentHeight);
-  hudX = clamped.x;
-  hudY = clamped.y;
-  await saveHudPosition(clamped);
+  const point = roundHudPoint({ x: hudX, y: hudY });
+  hudX = point.x;
+  hudY = point.y;
+  await saveHudPosition(point);
 }
 
 function scheduleRefocusAfterMove(): void {
@@ -189,9 +157,9 @@ function startHudPositionTracking(): void {
 
 function hudPositionToPersist(): HudPoint | null {
   try {
-    const contentHeight = lastHudHeight || layoutFrameHeight();
+    const height = contentHeight();
     const { canvasSpace } = figma.ui.getPosition();
-    const expected = defaultHudPosition(contentHeight, DEFAULT_HUD_INSET);
+    const expected = defaultHudPosition(height, DEFAULT_HUD_INSET);
     const moved =
       Math.abs(canvasSpace.x - expected.x) > POSITION_EPSILON ||
       Math.abs(canvasSpace.y - expected.y) > POSITION_EPSILON;
@@ -200,22 +168,19 @@ function hudPositionToPersist(): HudPoint | null {
       return null;
     }
 
-    return clampHudPosition(
-      canvasSpace.x,
-      canvasSpace.y,
-      UI_WIDTH,
-      contentHeight,
-    );
+    return roundHudPoint(canvasSpace);
   } catch {
     return null;
   }
 }
 
 async function persistHudPositionOnClose(): Promise<void> {
+  if (!hudUiShown) {
+    return;
+  }
   try {
     const point = hudPositionToPersist();
     if (!point) {
-      await clearHudPosition();
       return;
     }
     hudX = point.x;
@@ -235,9 +200,9 @@ async function initHudPlacement(height: number): Promise<void> {
   const saved = await loadHudPosition();
   if (saved) {
     hudUsesCustomPosition = true;
-    const clamped = clampHudPosition(saved.x, saved.y, UI_WIDTH, height);
-    hudX = clamped.x;
-    hudY = clamped.y;
+    const point = roundHudPoint(saved);
+    hudX = point.x;
+    hudY = point.y;
   } else {
     hudUsesCustomPosition = false;
     const point = defaultHudPosition(height, DEFAULT_HUD_INSET);
@@ -246,63 +211,40 @@ async function initHudPlacement(height: number): Promise<void> {
   }
 }
 
+function savedLaunchPoint(): HudPoint {
+  const height = contentHeight();
+  if (hudUsesCustomPosition) {
+    return { x: Math.round(hudX), y: Math.round(hudY) };
+  }
+  return defaultHudPosition(height, DEFAULT_HUD_INSET);
+}
+
+function currentDefaultLaunchPoint(): HudPoint {
+  return defaultHudPosition(contentHeight(), DEFAULT_HUD_INSET);
+}
+
 function buildUiSpecOptions() {
-  const contentHeight = lastHudHeight || layoutFrameHeight();
-  const defaultPoint = defaultHudPosition(contentHeight, DEFAULT_HUD_INSET);
+  const defaultPoint = currentDefaultLaunchPoint();
   const resetDraft = inSettingsMode(state) && state.resetHudPositionDraft;
-  const launchPoint =
-    resetDraft || !hudUsesCustomPosition ? defaultPoint : { x: hudX, y: hudY };
+  const saved =
+    inSettingsMode(state) && state.settingsHudLaunchSaved
+      ? state.settingsHudLaunchSaved
+      : savedLaunchPoint();
+  const draft =
+    inSettingsMode(state) && state.settingsHudLaunchDraft
+      ? state.settingsHudLaunchDraft
+      : saved;
+  const launchPoint = resetDraft ? defaultPoint : draft;
+  const relLaunch = toViewportRelative(launchPoint);
+  const relSaved = toViewportRelative(saved);
 
   return {
     hasCustomHudPosition: hudUsesCustomPosition,
-    hudLaunchX: Math.round(launchPoint.x),
-    hudLaunchY: Math.round(launchPoint.y),
+    hudLaunchX: relLaunch.x,
+    hudLaunchY: relLaunch.y,
+    hudLaunchSavedX: relSaved.x,
+    hudLaunchSavedY: relSaved.y,
   };
-}
-
-/** Resize and re-anchor only when height actually changes. */
-function syncHudFrame(height: number): void {
-  if (height <= 0 || height === lastHudHeight) {
-    return;
-  }
-  noteUserMovedHud(lastHudHeight || height);
-  figma.ui.resize(UI_WIDTH, height);
-  lastHudHeight = height;
-  if (!hudUsesCustomPosition) {
-    repositionHud(height);
-  }
-}
-
-function applyUiResize(height: number): void {
-  if (height <= 0 || !inSettingsMode(state)) {
-    return;
-  }
-  if (
-    lastHudHeight > 0 &&
-    Math.abs(height - lastHudHeight) <= HUD_RESIZE_THRESHOLD
-  ) {
-    return;
-  }
-  syncHudFrame(height);
-}
-
-function syncHudHeightFromUi(uiSpec: ReturnType<typeof buildUiSpec>): void {
-  const inSettings = inSettingsMode(state);
-  const justEntered = inSettings && !previousInSettings;
-  const justLeft = !inSettings && previousInSettings;
-
-  if (justLeft || !inSettings) {
-    syncHudFrame(layoutFrameHeight());
-    return;
-  }
-
-  if (justEntered) {
-    syncHudFrame(uiSpec.height);
-  }
-}
-
-function layoutFrameHeight(): number {
-  return UI_LAYOUT_FRAME_HEIGHT;
 }
 
 function getStackTransition(next: FigmodeState): StackTransition {
@@ -318,7 +260,6 @@ function getStackTransition(next: FigmodeState): StackTransition {
 
 function rememberStackState(next: FigmodeState): void {
   previousStackDepth = next.stack.length;
-  previousInSettings = inSettingsMode(next);
 }
 
 function postToUi(message: PluginToUiMessage): void {
@@ -329,12 +270,6 @@ function syncUi(): void {
   const frame = getActiveLayoutTarget();
   const uiSpec = buildUiSpec(state, bindings, frame, buildUiSpecOptions());
   const transition = getStackTransition(state);
-  const inSettings = inSettingsMode(state);
-  const settingsBoundaryChanged = inSettings !== previousInSettings;
-
-  if (transition === "none" || settingsBoundaryChanged) {
-    syncHudHeightFromUi(uiSpec);
-  }
   rememberStackState(state);
   postToUi({
     type: "state",
@@ -640,7 +575,12 @@ async function handleKeydown(key: string): Promise<void> {
       await closeFigmode();
       return;
     } else if (binding.id === "any.settings") {
-      state = enterSettings(state, bindings);
+      const saved = savedLaunchPoint();
+      state = {
+        ...enterSettings(state, bindings),
+        settingsHudLaunchSaved: saved,
+        settingsHudLaunchDraft: { ...saved },
+      };
     }
     syncUi();
     return;
@@ -664,10 +604,11 @@ async function handleKeydown(key: string): Promise<void> {
 }
 
 async function initLayoutMode(): Promise<void> {
+  hudUiShown = false;
   const frame = prepareLayoutTarget();
   if (!frame) {
     figma.notify("Select one or more objects to use Figmode Layout.");
-    closeFigmode();
+    figma.closePlugin();
     return;
   }
 
@@ -675,18 +616,16 @@ async function initLayoutMode(): Promise<void> {
   state = createInitialState();
   bindings = await loadBindings();
   previousStackDepth = state.stack.length;
-  previousInSettings = inSettingsMode(state);
 
-  const frameHeight = layoutFrameHeight();
+  const frameHeight = contentHeight();
   await initHudPlacement(frameHeight);
-  lastHudHeight = frameHeight;
   figma.showUI(__html__, {
     width: UI_WIDTH,
     height: frameHeight,
     position: { x: hudX, y: hudY },
     themeColors: true,
   });
-  ensureHudInViewport(frameHeight);
+  hudUiShown = true;
   startHudPositionTracking();
 }
 
@@ -720,9 +659,6 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
       });
       break;
     }
-    case "ui-resize":
-      applyUiResize(msg.height);
-      break;
     case "keydown":
       await handleKeydown(msg.key);
       break;
@@ -762,42 +698,94 @@ figma.ui.onmessage = async (msg: UiToPluginMessage) => {
       break;
     case "settings-draft-reset":
       if (inSettingsMode(state)) {
+        const defaultPoint = currentDefaultLaunchPoint();
         state = {
           ...state,
           settingsDraft: createDefaultDraft(),
           resetHudPositionDraft: true,
+          settingsHudLaunchDraft: defaultPoint,
         };
         syncUi();
       }
       break;
     case "settings-draft-reset-hud":
       if (inSettingsMode(state)) {
+        const defaultPoint = currentDefaultLaunchPoint();
         state = {
           ...state,
           resetHudPositionDraft: true,
+          settingsHudLaunchDraft: defaultPoint,
         };
         syncUi();
       }
       break;
-    case "settings-save":
-      if (inSettingsMode(state) && state.settingsDraft) {
-        bindings = await saveAllBindings(state.settingsDraft);
-
-        if (state.resetHudPositionDraft) {
-          await clearHudPosition();
-          repositionToDefault();
-        } else if (!hudUsesCustomPosition) {
-          repositionToDefault();
-        }
-
+    case "settings-draft-hud-position":
+      if (inSettingsMode(state)) {
         state = {
           ...state,
-          settingsDraft: bindings.map((binding) => ({ ...binding })),
+          settingsHudLaunchDraft: fromViewportRelative({
+            x: Math.round(msg.x),
+            y: Math.round(msg.y),
+          }),
           resetHudPositionDraft: false,
         };
         syncUi();
       }
       break;
+    case "settings-save": {
+      const settingsDraft = state.settingsDraft;
+      if (!inSettingsMode(state) || !settingsDraft) {
+        break;
+      }
+      if (msg.hudLaunchX !== undefined && msg.hudLaunchY !== undefined) {
+        state = {
+          ...state,
+          settingsHudLaunchDraft: fromViewportRelative({
+            x: Math.round(msg.hudLaunchX),
+            y: Math.round(msg.hudLaunchY),
+          }),
+          resetHudPositionDraft: false,
+        };
+      }
+
+      bindings = await saveAllBindings(settingsDraft);
+
+      const height = contentHeight();
+      if (state.resetHudPositionDraft) {
+        await clearHudPosition();
+        hudUsesCustomPosition = false;
+        repositionToDefault();
+      } else if (state.settingsHudLaunchDraft) {
+        const point = roundHudPoint(state.settingsHudLaunchDraft);
+        const defaultPoint = defaultHudPosition(height, DEFAULT_HUD_INSET);
+        const isCustom =
+          Math.abs(point.x - defaultPoint.x) > POSITION_EPSILON ||
+          Math.abs(point.y - defaultPoint.y) > POSITION_EPSILON;
+
+        if (isCustom) {
+          hudX = point.x;
+          hudY = point.y;
+          hudUsesCustomPosition = true;
+          await saveHudPosition(point);
+          figma.ui.reposition(hudX, hudY);
+        } else {
+          await clearHudPosition();
+          hudUsesCustomPosition = false;
+          repositionToDefault();
+        }
+      }
+
+      const savedAfterSave = savedLaunchPoint();
+      state = {
+        ...state,
+        settingsDraft: bindings.map((binding) => ({ ...binding })),
+        resetHudPositionDraft: false,
+        settingsHudLaunchSaved: savedAfterSave,
+        settingsHudLaunchDraft: { ...savedAfterSave },
+      };
+      syncUi();
+      break;
+    }
     default:
       break;
   }

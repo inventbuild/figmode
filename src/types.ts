@@ -35,6 +35,10 @@ export interface FigmodeState {
   settingsDraft: KeyBinding[] | null;
   /** When true, saving settings clears a custom HUD launch position. */
   resetHudPositionDraft: boolean;
+  /** Saved HUD launch position when settings was opened. */
+  settingsHudLaunchSaved: { x: number; y: number } | null;
+  /** Draft HUD launch position while editing settings. */
+  settingsHudLaunchDraft: { x: number; y: number } | null;
 }
 
 export type BindingScope =
@@ -57,7 +61,6 @@ export type StackTransition = "push" | "pop" | "none";
 
 export type UiToPluginMessage =
   | { type: "ready" }
-  | { type: "ui-resize"; height: number }
   | { type: "keydown"; key: string }
   | { type: "timeout" }
   | { type: "close" }
@@ -65,7 +68,8 @@ export type UiToPluginMessage =
   | { type: "settings-draft-reset-binding"; bindingId: string }
   | { type: "settings-draft-reset" }
   | { type: "settings-draft-reset-hud" }
-  | { type: "settings-save" }
+  | { type: "settings-draft-hud-position"; x: number; y: number }
+  | { type: "settings-save"; hudLaunchX?: number; hudLaunchY?: number }
 
 export type PluginToUiMessage =
   | {
@@ -126,4 +130,6 @@ export interface UiSpec {
   resetHudPositionDraft?: boolean;
   hudLaunchX?: number;
   hudLaunchY?: number;
+  hudLaunchSavedX?: number;
+  hudLaunchSavedY?: number;
 }

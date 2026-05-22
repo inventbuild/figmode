@@ -42,13 +42,28 @@ export function bindingDiffersFromDefault(binding: KeyBinding): boolean {
   return defaultKey !== undefined && binding.key !== defaultKey;
 }
 
+export function hudLaunchPositionDirty(
+  draft: { x: number; y: number } | null,
+  saved: { x: number; y: number } | null,
+): boolean {
+  if (!draft || !saved) {
+    return false;
+  }
+  return draft.x !== saved.x || draft.y !== saved.y;
+}
+
 export function settingsAreDirty(
   draft: KeyBinding[],
   saved: KeyBinding[],
   resetHudPositionDraft: boolean,
   hasCustomHudPosition: boolean,
+  hudLaunchDraft: { x: number; y: number } | null,
+  hudLaunchSaved: { x: number; y: number } | null,
 ): boolean {
   if (resetHudPositionDraft && hasCustomHudPosition) {
+    return true;
+  }
+  if (hudLaunchPositionDirty(hudLaunchDraft, hudLaunchSaved)) {
     return true;
   }
   return !bindingsMatchSaved(draft, saved);

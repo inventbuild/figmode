@@ -48,16 +48,20 @@ export function defaultHudPosition(contentHeight: number, inset: number): HudPoi
   };
 }
 
-export function clampHudPosition(
-  x: number,
-  y: number,
-  width: number,
-  contentHeight: number,
-): HudPoint {
+/** Canvas-space position → offset from the visible viewport top-left. */
+export function toViewportRelative(point: HudPoint): HudPoint {
   const bounds = figma.viewport.bounds;
-  const windowHeight = hudWindowHeight(contentHeight);
   return {
-    x: Math.max(bounds.x, Math.min(x, bounds.x + bounds.width - width)),
-    y: Math.max(bounds.y, Math.min(y, bounds.y + bounds.height - windowHeight)),
+    x: Math.round(point.x - bounds.x),
+    y: Math.round(point.y - bounds.y),
+  };
+}
+
+/** Viewport offset → absolute canvas-space position. */
+export function fromViewportRelative(point: HudPoint): HudPoint {
+  const bounds = figma.viewport.bounds;
+  return {
+    x: Math.round(point.x + bounds.x),
+    y: Math.round(point.y + bounds.y),
   };
 }

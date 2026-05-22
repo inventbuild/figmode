@@ -21,7 +21,6 @@ const stackStage = document.getElementById("stack-stage") as HTMLDivElement;
 const footerHost = document.getElementById("footer-host") as HTMLDivElement;
 const errorEl = document.getElementById("error") as HTMLDivElement;
 
-const BODY_PADDING = 14;
 const STACK_DURATION = 0.22;
 const STACK_EASING = [0.2, 0, 0, 1] as [number, number, number, number];
 
@@ -32,21 +31,25 @@ let inSettings = false;
 let inValueMode = false;
 let recordingBindingId: string | null = null;
 let lastUiSpec: UiSpec | null = null;
-let lastReportedHeight = 0;
-let reportSizeFrameId: number | null = null;
 let stackAnimating = false;
 const reduceMotion = window.matchMedia(
   "(prefers-reduced-motion: reduce)",
 ).matches;
 
-function startBindingRecording(bindingId: string, input: HTMLInputElement): void {
+function startBindingRecording(
+  bindingId: string,
+  input: HTMLInputElement,
+): void {
   recordingBindingId = bindingId;
   input.classList.add("recording");
   input.value = "Press a key…";
   requestAnimationFrame(() => capture.focus({ preventScroll: true }));
 }
 
-function cancelBindingRecording(input: HTMLInputElement, bindingKey: string): void {
+function cancelBindingRecording(
+  input: HTMLInputElement,
+  bindingKey: string,
+): void {
   if (recordingBindingId !== input.dataset.bindingId) {
     return;
   }
@@ -74,9 +77,10 @@ function syncSettingsInPlace(uiSpec: UiSpec): boolean {
     const revert = document.querySelector(
       `button[data-revert-binding-id="${binding.id}"]`,
     ) as HTMLButtonElement | null;
-    const defaultKey = DEFAULT_BINDINGS.find((item) => item.id === binding.id)?.key;
-    const differs =
-      defaultKey !== undefined && binding.key !== defaultKey;
+    const defaultKey = DEFAULT_BINDINGS.find(
+      (item) => item.id === binding.id,
+    )?.key;
+    const differs = defaultKey !== undefined && binding.key !== defaultKey;
 
     if (input && recordingBindingId !== binding.id) {
       input.value = binding.key;
@@ -93,9 +97,7 @@ function syncSettingsInPlace(uiSpec: UiSpec): boolean {
     'button[data-revert-hud-position="true"]',
   ) as HTMLButtonElement | null;
   if (resetHudRevert) {
-    const showRevert =
-      Boolean(uiSpec.hasCustomHudPosition) && !uiSpec.resetHudPositionDraft;
-    resetHudRevert.classList.toggle("is-hidden", !showRevert);
+    resetHudRevert.classList.toggle("is-hidden", !hudRevertVisible(uiSpec));
   }
 
   return true;
@@ -108,40 +110,126 @@ function syncHudLaunchPositionFields(uiSpec: UiSpec): void {
   const yInput = document.getElementById(
     "hud-launch-y",
   ) as HTMLInputElement | null;
-  if (xInput && uiSpec.hudLaunchX !== undefined) {
+  if (xInput && document.activeElement !== xInput && uiSpec.hudLaunchX !== undefined) {
     xInput.value = String(uiSpec.hudLaunchX);
   }
-  if (yInput && uiSpec.hudLaunchY !== undefined) {
+  if (yInput && document.activeElement !== yInput && uiSpec.hudLaunchY !== undefined) {
     yInput.value = String(uiSpec.hudLaunchY);
   }
 }
 
-function buildHudLaunchPositionField(
+function hudRevertVisible(uiSpec: UiSpec): boolean {
+  if (uiSpec.resetHudPositionDraft) {
+    return false;
+  }
+  if (uiSpec.hasCustomHudPosition) {
+    return true;
+  }
+  if (
+    uiSpec.hudLaunchX !== undefined &&
+    uiSpec.hudLaunchY !== undefined &&
+    uiSpec.hudLaunchSavedX !== undefined &&
+    uiSpec.hudLaunchSavedY !== undefined
+  ) {
+    return (
+      uiSpec.hudLaunchX !== uiSpec.hudLaunchSavedX ||
+      uiSpec.hudLaunchY !== uiSpec.hudLaunchSavedY
+    );
+  }
+  return false;
+}
+
+function parseHudCoord(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!/^-?\d+$/.test(trimmed)) {
+    return null;
+  }
+  return Number.parseInt(trimmed, 10);
+}
+
+let hudPositionDraftTimer: number | null = null;
+
+function readHudLaunchFieldsFromUi(): { x: number; y: number } | null {
+  const xInput = document.getElementById(
+    "hud-launch-x",
+  ) as HTMLInputElement | null;
+  const yInput = document.getElementById(
+    "hud-launch-y",
+  ) as HTMLInputElement | null;
+  if (!xInput || !yInput) {
+    return null;
+  }
+  const x = parseHudCoord(xInput.value);
+  const y = parseHudCoord(yInput.value);
+  if (x === null || y === null) {
+    return null;
+  }
+  return { x, y };
+}
+
+function postHudPositionDraftFromFields(): void {
+  const hud = readHudLaunchFieldsFromUi();
+  if (!hud) {
+    return;
+  }
+  post({ type: "settings-draft-hud-position", x: hud.x, y: hud.y });
+}
+
+function scheduleHudPositionDraftPost(): void {
+  if (hudPositionDraftTimer !== null) {
+    window.clearTimeout(hudPositionDraftTimer);
+  }
+  hudPositionDraftTimer = window.setTimeout(() => {
+    hudPositionDraftTimer = null;
+    postHudPositionDraftFromFields();
+  }, 250);
+}
+
+function attachHudPositionInputHandlers(input: HTMLInputElement): void {
+  input.type = "text";
+  input.inputMode = "numeric";
+  input.autocomplete = "off";
+  input.spellcheck = false;
+  input.addEventListener("keydown", (event) => {
+    event.stopPropagation();
+  });
+  input.addEventListener("input", scheduleHudPositionDraftPost);
+  input.addEventListener("change", postHudPositionDraftFromFields);
+  input.addEventListener("blur", postHudPositionDraftFromFields);
+}
+
+function buildHudLaunchPositionGroup(
   axis: "x" | "y",
   id: string,
   value: number | undefined,
 ): HTMLDivElement {
-  const field = el("div", "hud-position-field");
-  field.appendChild(el("span", "hud-position-axis", axis));
+  const group = el("div", "hud-position-group");
+  group.appendChild(el("span", "hud-position-axis", axis));
+  const box = el("div", "hud-position-box");
   const input = document.createElement("input");
   input.id = id;
-  input.readOnly = true;
+  input.title =
+    axis === "x"
+      ? "Distance from the left edge of the visible viewport"
+      : "Distance from the top edge of the visible viewport";
   input.value = value !== undefined ? String(value) : "";
-  field.appendChild(input);
-  return field;
+  attachHudPositionInputHandlers(input);
+  box.appendChild(input);
+  group.appendChild(box);
+  return group;
 }
 
 function buildHudLaunchPositionFields(uiSpec: UiSpec): HTMLDivElement {
-  const fields = el("div", "hud-position-fields");
+  const fields = el("div", "hud-position-fields settings-value");
   fields.append(
-    buildHudLaunchPositionField("x", "hud-launch-x", uiSpec.hudLaunchX),
-    buildHudLaunchPositionField("y", "hud-launch-y", uiSpec.hudLaunchY),
+    buildHudLaunchPositionGroup("x", "hud-launch-x", uiSpec.hudLaunchX),
+    buildHudLaunchPositionGroup("y", "hud-launch-y", uiSpec.hudLaunchY),
   );
   return fields;
 }
 
-function appendRevertButton(
-  keyWrap: HTMLDivElement,
+function appendRevertSlot(
+  row: HTMLElement,
   options: {
     hidden: boolean;
     title: string;
@@ -149,7 +237,7 @@ function appendRevertButton(
     dataset?: Record<string, string>;
   },
 ): void {
-  const slot = el("div", "binding-revert-slot");
+  const slot = el("div", "settings-revert-slot");
   const revert = el("button", "binding-revert", "↩");
   revert.type = "button";
   revert.title = options.title;
@@ -161,35 +249,11 @@ function appendRevertButton(
     }
   }
   slot.appendChild(revert);
-  keyWrap.appendChild(slot);
+  row.appendChild(slot);
 }
 
 function post(message: UiToPluginMessage): void {
   parent.postMessage({ pluginMessage: message }, "*");
-}
-
-function measurePanelHeight(): number {
-  return Math.ceil(panel.offsetHeight + errorEl.offsetHeight + BODY_PADDING);
-}
-
-function reportSize(): void {
-  if (!inSettings) {
-    return;
-  }
-  if (reportSizeFrameId !== null) {
-    cancelAnimationFrame(reportSizeFrameId);
-  }
-  reportSizeFrameId = requestAnimationFrame(() => {
-    reportSizeFrameId = requestAnimationFrame(() => {
-      reportSizeFrameId = null;
-      const height = measurePanelHeight();
-      if (height <= 0 || height === lastReportedHeight) {
-        return;
-      }
-      lastReportedHeight = height;
-      post({ type: "ui-resize", height });
-    });
-  });
 }
 
 function formatKeyFromEvent(event: KeyboardEvent): string {
@@ -218,8 +282,31 @@ function fitValueInputWidth(input: HTMLInputElement): void {
   input.style.width = `${Math.ceil(input.scrollWidth) + 2}px`;
 }
 
-function focusKeyTarget(): void {
-  if (inSettings) {
+function shouldSkipKeyboardCapture(): boolean {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLInputElement)) {
+    return false;
+  }
+  if (active.id === "hud-launch-x" || active.id === "hud-launch-y") {
+    return true;
+  }
+  if (inValueMode && active.id === "value-input") {
+    return true;
+  }
+  if (active.dataset.bindingId) {
+    return true;
+  }
+  return false;
+}
+
+function ensureKeyboardCapture(): void {
+  if (shouldSkipKeyboardCapture()) {
+    return;
+  }
+  if (recordingBindingId) {
+    if (document.hasFocus()) {
+      capture.focus({ preventScroll: true });
+    }
     return;
   }
   const valueInput = document.getElementById(
@@ -234,7 +321,14 @@ function focusKeyTarget(): void {
     });
     return;
   }
+  if (!document.hasFocus()) {
+    return;
+  }
   capture.focus({ preventScroll: true });
+}
+
+function focusKeyTarget(): void {
+  ensureKeyboardCapture();
 }
 
 function wireValueInput(input: HTMLInputElement): void {
@@ -315,11 +409,30 @@ function renderKeyRow(item: {
   return row;
 }
 
+function createBreadcrumbSeparator(): SVGSVGElement {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", "4");
+  svg.setAttribute("height", "8");
+  svg.setAttribute("viewBox", "0 0 4 8");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("aria-hidden", "true");
+  svg.classList.add("breadcrumb-sep");
+
+  const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  path.setAttribute(
+    "d",
+    "M0.146444 0.167363C0.341702 -0.0557877 0.658203 -0.0557877 0.853462 0.167363L3.8534 3.59584C4.04866 3.81899 4.04866 4.1807 3.8534 4.40386L0.853462 7.83233C0.658203 8.05548 0.341702 8.05548 0.146444 7.83233C-0.0488146 7.60918 -0.0488146 7.24747 0.146444 7.02432L2.79288 3.99985L0.146444 0.975377C-0.0488146 0.752226 -0.0488146 0.390514 0.146444 0.167363Z",
+  );
+  path.setAttribute("fill", "currentColor");
+  svg.appendChild(path);
+  return svg;
+}
+
 function renderBreadcrumb(crumbs: string[]): HTMLDivElement {
   const wrap = el("div", "breadcrumb");
   crumbs.forEach((crumb, index) => {
     if (index > 0) {
-      wrap.appendChild(el("span", "breadcrumb-sep"));
+      wrap.appendChild(createBreadcrumbSeparator());
     }
     wrap.appendChild(el("span", undefined, crumb));
   });
@@ -343,16 +456,16 @@ function renderBindingRows(bindings: KeyBinding[]): HTMLDivElement {
     }
 
     for (const binding of group.items) {
-      const row = document.createElement("div");
-      row.className = "binding-row";
+      const row = el("div", "settings-row");
 
       const label = document.createElement("label");
+      label.className = "settings-row-label";
       const path = bindingFullPath(binding.scope, binding.label);
       label.textContent = path;
       label.title = path;
 
-      const keyWrap = el("div", "binding-key-wrap");
       const input = document.createElement("input");
+      input.className = "settings-key-input";
       input.value = binding.key;
       input.readOnly = true;
       input.dataset.bindingId = binding.id;
@@ -367,10 +480,13 @@ function renderBindingRows(bindings: KeyBinding[]): HTMLDivElement {
           cancelBindingRecording(input, binding.key);
         }, 0);
       });
-      keyWrap.appendChild(input);
 
-      const defaultKey = DEFAULT_BINDINGS.find((item) => item.id === binding.id)?.key;
-      appendRevertButton(keyWrap, {
+      row.append(label, input);
+
+      const defaultKey = DEFAULT_BINDINGS.find(
+        (item) => item.id === binding.id,
+      )?.key;
+      appendRevertSlot(row, {
         hidden: defaultKey === undefined || binding.key === defaultKey,
         title: "Revert to default",
         onClick: () => {
@@ -379,38 +495,30 @@ function renderBindingRows(bindings: KeyBinding[]): HTMLDivElement {
         dataset: { revertBindingId: binding.id },
       });
 
-      row.append(label, keyWrap);
       list.appendChild(row);
     }
   });
   return list;
 }
 
-function buildHudSettingsSection(uiSpec: UiSpec): HTMLDivElement {
-  const section = el("div", "hud-settings");
-  section.appendChild(el("div", "settings-section-title", "HUD"));
-
-  const row = el("div", "binding-row");
-  const label = el("label", undefined, "Launch position");
-  const keyWrap = el("div", "binding-key-wrap");
-  keyWrap.appendChild(buildHudLaunchPositionFields(uiSpec));
-  appendRevertButton(keyWrap, {
-    hidden:
-      !uiSpec.hasCustomHudPosition || Boolean(uiSpec.resetHudPositionDraft),
+function buildHudLaunchPositionRow(uiSpec: UiSpec): HTMLDivElement {
+  const row = el("div", "settings-row");
+  const label = el("label", "settings-row-label", "HUD Launch Position");
+  row.append(label, buildHudLaunchPositionFields(uiSpec));
+  appendRevertSlot(row, {
+    hidden: !hudRevertVisible(uiSpec),
     title: "Reset launch position on save",
     onClick: () => {
       post({ type: "settings-draft-reset-hud" });
     },
     dataset: { revertHudPosition: "true" },
   });
-  row.append(label, keyWrap);
-  section.appendChild(row);
-  return section;
+  return row;
 }
 
 function buildSettingsView(uiSpec: UiSpec): HTMLDivElement {
   const wrap = el("div", "settings-view");
-  wrap.appendChild(buildHudSettingsSection(uiSpec));
+  wrap.appendChild(buildHudLaunchPositionRow(uiSpec));
   const divider = document.createElement("hr");
   divider.className = "settings-divider";
   wrap.appendChild(divider);
@@ -452,7 +560,11 @@ function buildSettingsView(uiSpec: UiSpec): HTMLDivElement {
     confirm.classList.remove("open");
   };
   saveButton.onclick = () => {
-    post({ type: "settings-save" });
+    const hud = readHudLaunchFieldsFromUi();
+    post({
+      type: "settings-save",
+      ...(hud ? { hudLaunchX: hud.x, hudLaunchY: hud.y } : {}),
+    });
   };
 
   return wrap;
@@ -524,7 +636,17 @@ function buildContent(uiSpec: UiSpec): HTMLDivElement {
   return content;
 }
 
+function updateScrollLayout(uiSpec: UiSpec): void {
+  const scrollable = uiSpec.layout === "settings";
+  stackViewport.classList.toggle("stack-viewport--scroll", scrollable);
+  stackStage.classList.toggle("stack-stage--fill", !scrollable);
+  if (!scrollable) {
+    stackViewport.scrollTop = 0;
+  }
+}
+
 function updateChrome(uiSpec: UiSpec): void {
+  updateScrollLayout(uiSpec);
   breadcrumbHost.classList.add("hud-header");
   breadcrumbHost.replaceChildren();
   footerHost.replaceChildren();
@@ -550,7 +672,6 @@ function finishStackTransition(fromLayer: HTMLElement | null): void {
     fromLayer.remove();
   }
   stackAnimating = false;
-  reportSize();
   focusKeyTarget();
 }
 
@@ -609,7 +730,6 @@ function setStackContent(uiSpec: UiSpec, transition: StackTransition): void {
   }
 
   if (transition === "none" && syncSettingsInPlace(uiSpec)) {
-    reportSize();
     return;
   }
 
@@ -624,7 +744,6 @@ function setStackContent(uiSpec: UiSpec, transition: StackTransition): void {
   if (!canAnimate) {
     stackStage.replaceChildren();
     mountStackLayer(nextContent);
-    reportSize();
     focusKeyTarget();
     return;
   }
@@ -652,8 +771,6 @@ function applyState(
 
   if (inSettings) {
     clearTimer();
-    lastReportedHeight = 0;
-    reportSize();
   } else if (!recordingBindingId) {
     focusKeyTarget();
   }
@@ -698,6 +815,14 @@ function handlePluginKeydown(event: KeyboardEvent): void {
   }
 
   if (inSettings) {
+    const target = event.target;
+    if (
+      target instanceof HTMLInputElement &&
+      (target.id === "hud-launch-x" || target.id === "hud-launch-y")
+    ) {
+      return;
+    }
+
     const key = formatKeyFromEvent(event);
     if (!key || ["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
       return;
@@ -721,11 +846,32 @@ function handlePluginKeydown(event: KeyboardEvent): void {
 }
 
 capture.addEventListener("keydown", handlePluginKeydown);
+capture.addEventListener("blur", () => {
+  requestAnimationFrame(() => {
+    if (!document.hasFocus()) {
+      return;
+    }
+    ensureKeyboardCapture();
+  });
+});
 window.addEventListener("keydown", handlePluginKeydown, true);
 
-panel.addEventListener(
+document.addEventListener(
   "pointerdown",
-  () => {
+  (event) => {
+    const target = event.target;
+    if (target instanceof HTMLInputElement && target.dataset.bindingId) {
+      return;
+    }
+    if (
+      target instanceof HTMLInputElement &&
+      (target.id === "hud-launch-x" || target.id === "hud-launch-y")
+    ) {
+      return;
+    }
+    if (target instanceof HTMLButtonElement) {
+      return;
+    }
     focusKeyTarget();
   },
   true,
@@ -734,6 +880,30 @@ panel.addEventListener(
 window.addEventListener("focus", () => {
   focusKeyTarget();
 });
+
+window.setInterval(() => {
+  if (!document.hasFocus() || shouldSkipKeyboardCapture()) {
+    return;
+  }
+  if (recordingBindingId) {
+    if (document.activeElement !== capture) {
+      ensureKeyboardCapture();
+    }
+    return;
+  }
+  if (inValueMode) {
+    const valueInput = document.getElementById(
+      "value-input",
+    ) as HTMLInputElement | null;
+    if (valueInput && document.activeElement !== valueInput) {
+      ensureKeyboardCapture();
+    }
+    return;
+  }
+  if (document.activeElement !== capture) {
+    ensureKeyboardCapture();
+  }
+}, 300);
 
 window.onmessage = (event: MessageEvent) => {
   const msg = event.data.pluginMessage as PluginToUiMessage | undefined;
@@ -753,6 +923,9 @@ window.onmessage = (event: MessageEvent) => {
       clearTimer();
       break;
     case "focus":
+      if (!document.hasFocus()) {
+        window.focus();
+      }
       focusKeyTarget();
       break;
     case "error":

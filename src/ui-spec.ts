@@ -1,5 +1,4 @@
 import type { FigmodeState, KeyBinding, UiKeyItem, UiSpec } from "./types";
-import { groupBindingsByScope } from "./binding-scope";
 import {
   isAutoLayout,
   layoutRootBindingIds,
@@ -12,47 +11,12 @@ import type { LayoutTarget } from "./target";
 /** Fixed HUD width — sized for the alignment grid (widest view). */
 export const UI_WIDTH = 340;
 
-const UI_HEIGHT = {
-  twoColumn: 195,
-  alignmentGrid: 168,
-  paddingGrid: 152,
-  list: 132,
-  value: 118,
-};
-
-/** Fixed plugin frame height for all layout modes — avoids resize/reposition jank during stack transitions. */
-export const UI_LAYOUT_FRAME_HEIGHT = Math.max(
-  UI_HEIGHT.twoColumn,
-  UI_HEIGHT.alignmentGrid,
-  UI_HEIGHT.paddingGrid,
-  UI_HEIGHT.list,
-  UI_HEIGHT.value,
-);
-
-function settingsHeight(bindings: KeyBinding[]): number {
-  const bodyPadding = 14;
-  const title = 12;
-  const sectionGap = 8;
-  const rowHeight = 26;
-  const groupDivider = 9;
-  const actions = 28;
-  const error = 14;
-  const hudSection = 34;
-  const groupCount = groupBindingsByScope(bindings).length;
-  const groupChrome = Math.max(0, groupCount - 1) * groupDivider;
-  return (
-    bodyPadding +
-    title +
-    sectionGap +
-    hudSection +
-    sectionGap +
-    groupChrome +
-    bindings.length * rowHeight +
-    sectionGap +
-    actions +
-    error
-  );
-}
+/**
+ * Plugin iframe height (px). This is the only value that controls HUD window size.
+ * After changing: `npm run build`, then close Figmode and re-run Layout Mode
+ * (Figma does not hot-reload the plugin main thread).
+ */
+export const UI_FRAME_HEIGHT = 190;
 
 function displayKey(key: string): string {
   if (key === "Escape") return "esc";
@@ -188,6 +152,8 @@ export function buildUiSpec(
     hasCustomHudPosition?: boolean;
     hudLaunchX?: number;
     hudLaunchY?: number;
+    hudLaunchSavedX?: number;
+    hudLaunchSavedY?: number;
   } = {},
 ): UiSpec {
   const footer = footerKeys(bindings);
@@ -206,12 +172,16 @@ export function buildUiSpec(
         bindings,
         state.resetHudPositionDraft,
         hasCustomHudPosition,
+        state.settingsHudLaunchDraft,
+        state.settingsHudLaunchSaved,
       ),
       hasCustomHudPosition,
       resetHudPositionDraft: state.resetHudPositionDraft,
       hudLaunchX: options.hudLaunchX,
       hudLaunchY: options.hudLaunchY,
-      height: settingsHeight(draft),
+      hudLaunchSavedX: options.hudLaunchSavedX,
+      hudLaunchSavedY: options.hudLaunchSavedY,
+      height: UI_FRAME_HEIGHT,
     };
   }
 
@@ -233,7 +203,7 @@ export function buildUiSpec(
       right: valueRight,
       footer,
       valueText: state.valueBuffer,
-      height: UI_HEIGHT.value,
+      height: UI_FRAME_HEIGHT,
     };
   }
 
@@ -251,7 +221,7 @@ export function buildUiSpec(
       left: orderedKeys(bindings, leftIds),
       right: orderedKeys(bindings, rightIds, true),
       footer,
-      height: UI_HEIGHT.twoColumn,
+      height: UI_FRAME_HEIGHT,
     };
   }
 
@@ -262,7 +232,7 @@ export function buildUiSpec(
         breadcrumb,
         items: [],
         footer,
-        height: UI_HEIGHT.list,
+        height: UI_FRAME_HEIGHT,
       };
     }
     const rows = ALIGNMENT_GRID.map((row) =>
@@ -276,7 +246,7 @@ export function buildUiSpec(
       breadcrumb,
       rows,
       footer,
-      height: UI_HEIGHT.alignmentGrid,
+      height: UI_FRAME_HEIGHT,
     };
   }
 
@@ -287,7 +257,7 @@ export function buildUiSpec(
         breadcrumb,
         items: [],
         footer,
-        height: UI_HEIGHT.list,
+        height: UI_FRAME_HEIGHT,
       };
     }
     const columns: UiKeyItem[][] = [
@@ -310,7 +280,7 @@ export function buildUiSpec(
       breadcrumb,
       columns,
       footer,
-      height: UI_HEIGHT.paddingGrid,
+      height: UI_FRAME_HEIGHT,
     };
   }
 
@@ -337,6 +307,6 @@ export function buildUiSpec(
     breadcrumb,
     items: scopeBindings,
     footer,
-    height: UI_HEIGHT.list,
+    height: UI_FRAME_HEIGHT,
   };
 }

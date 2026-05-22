@@ -7,6 +7,8 @@ export function createInitialState(): FigmodeState {
     autoGap: false,
     settingsDraft: null,
     resetHudPositionDraft: false,
+    settingsHudLaunchSaved: null,
+    settingsHudLaunchDraft: null,
   };
 }
 
@@ -102,6 +104,8 @@ export function popMode(state: FigmodeState): FigmodeState {
   if (top.mode === "settings") {
     next.settingsDraft = null;
     next.resetHudPositionDraft = false;
+    next.settingsHudLaunchSaved = null;
+    next.settingsHudLaunchDraft = null;
   }
   return next;
 }

@@ -6,6 +6,8 @@
     <style>
       :root {
         color-scheme: light dark;
+        --settings-value-width: 100px;
+        --settings-revert-width: 30px;
         font-family:
           Inter,
           system-ui,
@@ -20,6 +22,7 @@
       html,
       body {
         overflow: hidden;
+        height: 100%;
       }
 
       body {
@@ -29,32 +32,58 @@
         color: var(--figma-color-text);
         font-size: 12px;
         line-height: normal;
-      }
-
-      .stack-viewport {
-        overflow: hidden;
-        position: relative;
-        flex: 1;
-        min-height: 128px;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
       }
 
       .panel {
         display: flex;
         flex-direction: column;
+        flex: 1 1 0;
         gap: 5px;
         width: 326px;
-        min-height: 174px;
+        min-height: 0;
+      }
+
+      #breadcrumb-host,
+      .divider,
+      #footer-host {
+        flex: 0 0 auto;
+      }
+
+      .stack-viewport {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .stack-viewport--scroll {
+        overflow-x: hidden;
+        overflow-y: auto;
       }
 
       .stack-stage {
         display: grid;
         grid-template-columns: 100%;
+        align-content: start;
+      }
+
+      .stack-stage--fill {
+        min-height: 100%;
+        height: 100%;
       }
 
       .stack-layer {
         grid-area: 1 / 1;
         min-width: 0;
         background: var(--figma-color-bg);
+        align-self: start;
+      }
+
+      .stack-stage--fill .stack-layer {
+        min-height: 100%;
       }
 
       .stack-layer.is-front {
@@ -63,6 +92,7 @@
 
       .stack-layer.is-back {
         z-index: 0;
+        pointer-events: none;
       }
 
       .divider {
@@ -87,46 +117,52 @@
         width: 4px;
         height: 8px;
         flex-shrink: 0;
-      }
-
-      .breadcrumb-sep::before {
-        content: "›";
         display: block;
-        font-size: 10px;
-        line-height: 8px;
         color: var(--figma-color-text-secondary);
       }
 
-      .settings-section-title {
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--figma-color-text-secondary);
-      }
-
-      .hud-settings {
+      .settings-row {
         display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
-
-      .binding-key-wrap {
-        display: flex;
-        gap: 4px;
         align-items: center;
-        justify-content: flex-end;
+        width: 100%;
       }
 
-      .binding-key-wrap input {
-        width: 72px;
+      .settings-row-label {
+        flex: 1 1 0;
+        min-width: 0;
+        font-size: 12px;
+        line-height: normal;
+        color: var(--figma-color-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
-      .binding-row input.recording {
+      .settings-value {
+        width: var(--settings-value-width);
+        flex-shrink: 0;
+      }
+
+      .settings-key-input {
+        width: var(--settings-value-width);
+        flex-shrink: 0;
+        font: inherit;
+        font-size: 12px;
+        line-height: normal;
+        padding: 3px;
+        border: 1px solid var(--figma-color-border, #d7d7d7);
+        border-radius: 5px;
+        background: var(--figma-color-bg);
+        color: var(--figma-color-text);
+      }
+
+      .settings-key-input.recording {
         border-color: var(--figma-color-border-selected);
         color: var(--figma-color-text-secondary);
       }
 
-      .binding-revert-slot {
-        width: 28px;
+      .settings-revert-slot {
+        width: var(--settings-revert-width);
         flex-shrink: 0;
         display: flex;
         justify-content: center;
@@ -143,55 +179,49 @@
         pointer-events: none;
       }
 
-      .hud-position-fields {
+      .settings-value.hud-position-fields {
         display: flex;
-        gap: 0;
-        width: 72px;
+        gap: 5px;
+        width: var(--settings-value-width);
+        flex-shrink: 0;
       }
 
-      .hud-position-field {
+      .hud-position-group {
         display: flex;
+        flex: 1 1 0;
         align-items: center;
-        width: 36px;
-        box-sizing: border-box;
-        border: 1px solid var(--figma-color-border);
+        gap: 2px;
+        min-width: 0;
+        overflow: hidden;
+      }
+
+      .hud-position-axis {
+        flex: 0 0 auto;
+        font-size: 12px;
+        line-height: normal;
+        color: var(--figma-color-text);
+      }
+
+      .hud-position-box {
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 3px;
+        border: 1px solid var(--figma-color-border, #d7d7d7);
+        border-radius: 5px;
         background: var(--figma-color-bg);
         overflow: hidden;
       }
 
-      .hud-position-field:first-child {
-        border-top-right-radius: 0;
-        border-bottom-right-radius: 0;
-        border-right-width: 0;
-        border-top-left-radius: 4px;
-        border-bottom-left-radius: 4px;
-      }
-
-      .hud-position-field:last-child {
-        border-top-left-radius: 0;
-        border-bottom-left-radius: 0;
-        border-top-right-radius: 4px;
-        border-bottom-right-radius: 4px;
-      }
-
-      .hud-position-axis {
-        flex-shrink: 0;
-        padding-left: 4px;
-        font-size: 10px;
-        line-height: 1;
-        color: var(--figma-color-text-secondary);
-        text-transform: lowercase;
-      }
-
-      .hud-position-field input {
+      .hud-position-box input {
+        display: block;
         width: 100%;
         min-width: 0;
+        padding: 0;
         border: 0;
-        padding: 2px 3px 2px 1px;
         background: transparent;
-        text-align: right;
         font: inherit;
-        font-size: 11px;
+        font-size: 12px;
+        line-height: normal;
         font-variant-numeric: tabular-nums;
         color: var(--figma-color-text);
       }
@@ -263,7 +293,27 @@
       .footer {
         display: flex;
         gap: 10px;
-        align-items: flex-start;
+        align-items: center;
+        line-height: 1;
+        margin: 0;
+        padding: 0;
+      }
+
+      .footer .key-row {
+        line-height: 1;
+      }
+
+      .footer .key-pill {
+        padding: 1px 5px;
+        line-height: 16px;
+      }
+
+      .footer .key-label {
+        line-height: 16px;
+      }
+
+      #footer-host {
+        line-height: 1;
       }
 
       .value-mode {
@@ -303,6 +353,12 @@
       .error {
         color: var(--figma-color-text-danger);
         font-size: 11px;
+        min-height: 0;
+        flex-shrink: 0;
+      }
+
+      .error:not(:empty) {
+        margin-top: 4px;
         min-height: 14px;
       }
 
@@ -318,6 +374,7 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
+        padding-bottom: 4px;
       }
 
       .binding-list {
@@ -326,37 +383,12 @@
         gap: 0;
       }
 
-      .binding-row {
-        display: grid;
-        grid-template-columns: 1fr auto;
-        gap: 6px;
-        align-items: start;
-      }
-
-      .binding-row label {
-        font-size: 11px;
-        line-height: 1.3;
-        white-space: normal;
-        color: var(--figma-color-text);
-      }
-
       .settings-divider {
         background: var(--figma-color-border);
         height: 1px;
         border: 0;
         margin: 4px 0;
         align-self: stretch;
-      }
-
-      .binding-row input {
-        width: 100%;
-        font: inherit;
-        font-size: 11px;
-        padding: 2px 4px;
-        border: 1px solid var(--figma-color-border);
-        border-radius: 4px;
-        background: var(--figma-color-bg);
-        color: var(--figma-color-text);
       }
 
       .settings-actions {
@@ -418,6 +450,23 @@
     <script>
       "use strict";
 (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropSymbols = Object.getOwnPropertySymbols;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __propIsEnum = Object.prototype.propertyIsEnumerable;
+  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+  var __spreadValues = (a, b) => {
+    for (var prop in b || (b = {}))
+      if (__hasOwnProp.call(b, prop))
+        __defNormalProp(a, prop, b[prop]);
+    if (__getOwnPropSymbols)
+      for (var prop of __getOwnPropSymbols(b)) {
+        if (__propIsEnum.call(b, prop))
+          __defNormalProp(a, prop, b[prop]);
+      }
+    return a;
+  };
+
   // node_modules/.pnpm/@motionone+utils@10.18.0/node_modules/@motionone/utils/dist/array.es.js
   function addUniqueItem(array, item) {
     array.indexOf(item) === -1 && array.push(item);
@@ -1409,7 +1458,6 @@
   var stackStage = document.getElementById("stack-stage");
   var footerHost = document.getElementById("footer-host");
   var errorEl = document.getElementById("error");
-  var BODY_PADDING = 14;
   var STACK_DURATION = 0.22;
   var STACK_EASING = [0.2, 0, 0, 1];
   var timeoutMs = 1e3;
@@ -1419,8 +1467,6 @@
   var inValueMode = false;
   var recordingBindingId = null;
   var lastUiSpec = null;
-  var lastReportedHeight = 0;
-  var reportSizeFrameId = null;
   var stackAnimating = false;
   var reduceMotion = window.matchMedia(
     "(prefers-reduced-motion: reduce)"
@@ -1457,7 +1503,9 @@
       const revert = document.querySelector(
         `button[data-revert-binding-id="${binding.id}"]`
       );
-      const defaultKey = (_a = DEFAULT_BINDINGS.find((item) => item.id === binding.id)) == null ? void 0 : _a.key;
+      const defaultKey = (_a = DEFAULT_BINDINGS.find(
+        (item) => item.id === binding.id
+      )) == null ? void 0 : _a.key;
       const differs = defaultKey !== void 0 && binding.key !== defaultKey;
       if (input && recordingBindingId !== binding.id) {
         input.value = binding.key;
@@ -1472,8 +1520,7 @@
       'button[data-revert-hud-position="true"]'
     );
     if (resetHudRevert) {
-      const showRevert = Boolean(uiSpec.hasCustomHudPosition) && !uiSpec.resetHudPositionDraft;
-      resetHudRevert.classList.toggle("is-hidden", !showRevert);
+      resetHudRevert.classList.toggle("is-hidden", !hudRevertVisible(uiSpec));
     }
     return true;
   }
@@ -1484,33 +1531,101 @@
     const yInput = document.getElementById(
       "hud-launch-y"
     );
-    if (xInput && uiSpec.hudLaunchX !== void 0) {
+    if (xInput && document.activeElement !== xInput && uiSpec.hudLaunchX !== void 0) {
       xInput.value = String(uiSpec.hudLaunchX);
     }
-    if (yInput && uiSpec.hudLaunchY !== void 0) {
+    if (yInput && document.activeElement !== yInput && uiSpec.hudLaunchY !== void 0) {
       yInput.value = String(uiSpec.hudLaunchY);
     }
   }
-  function buildHudLaunchPositionField(axis, id, value) {
-    const field = el("div", "hud-position-field");
-    field.appendChild(el("span", "hud-position-axis", axis));
+  function hudRevertVisible(uiSpec) {
+    if (uiSpec.resetHudPositionDraft) {
+      return false;
+    }
+    if (uiSpec.hasCustomHudPosition) {
+      return true;
+    }
+    if (uiSpec.hudLaunchX !== void 0 && uiSpec.hudLaunchY !== void 0 && uiSpec.hudLaunchSavedX !== void 0 && uiSpec.hudLaunchSavedY !== void 0) {
+      return uiSpec.hudLaunchX !== uiSpec.hudLaunchSavedX || uiSpec.hudLaunchY !== uiSpec.hudLaunchSavedY;
+    }
+    return false;
+  }
+  function parseHudCoord(raw) {
+    const trimmed = raw.trim();
+    if (!/^-?\d+$/.test(trimmed)) {
+      return null;
+    }
+    return Number.parseInt(trimmed, 10);
+  }
+  var hudPositionDraftTimer = null;
+  function readHudLaunchFieldsFromUi() {
+    const xInput = document.getElementById(
+      "hud-launch-x"
+    );
+    const yInput = document.getElementById(
+      "hud-launch-y"
+    );
+    if (!xInput || !yInput) {
+      return null;
+    }
+    const x = parseHudCoord(xInput.value);
+    const y = parseHudCoord(yInput.value);
+    if (x === null || y === null) {
+      return null;
+    }
+    return { x, y };
+  }
+  function postHudPositionDraftFromFields() {
+    const hud = readHudLaunchFieldsFromUi();
+    if (!hud) {
+      return;
+    }
+    post({ type: "settings-draft-hud-position", x: hud.x, y: hud.y });
+  }
+  function scheduleHudPositionDraftPost() {
+    if (hudPositionDraftTimer !== null) {
+      window.clearTimeout(hudPositionDraftTimer);
+    }
+    hudPositionDraftTimer = window.setTimeout(() => {
+      hudPositionDraftTimer = null;
+      postHudPositionDraftFromFields();
+    }, 250);
+  }
+  function attachHudPositionInputHandlers(input) {
+    input.type = "text";
+    input.inputMode = "numeric";
+    input.autocomplete = "off";
+    input.spellcheck = false;
+    input.addEventListener("keydown", (event) => {
+      event.stopPropagation();
+    });
+    input.addEventListener("input", scheduleHudPositionDraftPost);
+    input.addEventListener("change", postHudPositionDraftFromFields);
+    input.addEventListener("blur", postHudPositionDraftFromFields);
+  }
+  function buildHudLaunchPositionGroup(axis, id, value) {
+    const group = el("div", "hud-position-group");
+    group.appendChild(el("span", "hud-position-axis", axis));
+    const box = el("div", "hud-position-box");
     const input = document.createElement("input");
     input.id = id;
-    input.readOnly = true;
+    input.title = axis === "x" ? "Distance from the left edge of the visible viewport" : "Distance from the top edge of the visible viewport";
     input.value = value !== void 0 ? String(value) : "";
-    field.appendChild(input);
-    return field;
+    attachHudPositionInputHandlers(input);
+    box.appendChild(input);
+    group.appendChild(box);
+    return group;
   }
   function buildHudLaunchPositionFields(uiSpec) {
-    const fields = el("div", "hud-position-fields");
+    const fields = el("div", "hud-position-fields settings-value");
     fields.append(
-      buildHudLaunchPositionField("x", "hud-launch-x", uiSpec.hudLaunchX),
-      buildHudLaunchPositionField("y", "hud-launch-y", uiSpec.hudLaunchY)
+      buildHudLaunchPositionGroup("x", "hud-launch-x", uiSpec.hudLaunchX),
+      buildHudLaunchPositionGroup("y", "hud-launch-y", uiSpec.hudLaunchY)
     );
     return fields;
   }
-  function appendRevertButton(keyWrap, options) {
-    const slot = el("div", "binding-revert-slot");
+  function appendRevertSlot(row, options) {
+    const slot = el("div", "settings-revert-slot");
     const revert = el("button", "binding-revert", "\u21A9");
     revert.type = "button";
     revert.title = options.title;
@@ -1522,32 +1637,10 @@
       }
     }
     slot.appendChild(revert);
-    keyWrap.appendChild(slot);
+    row.appendChild(slot);
   }
   function post(message) {
     parent.postMessage({ pluginMessage: message }, "*");
-  }
-  function measurePanelHeight() {
-    return Math.ceil(panel.offsetHeight + errorEl.offsetHeight + BODY_PADDING);
-  }
-  function reportSize() {
-    if (!inSettings) {
-      return;
-    }
-    if (reportSizeFrameId !== null) {
-      cancelAnimationFrame(reportSizeFrameId);
-    }
-    reportSizeFrameId = requestAnimationFrame(() => {
-      reportSizeFrameId = requestAnimationFrame(() => {
-        reportSizeFrameId = null;
-        const height = measurePanelHeight();
-        if (height <= 0 || height === lastReportedHeight) {
-          return;
-        }
-        lastReportedHeight = height;
-        post({ type: "ui-resize", height });
-      });
-    });
   }
   function formatKeyFromEvent(event) {
     const parts = [];
@@ -1569,8 +1662,30 @@
     input.style.width = "0";
     input.style.width = `${Math.ceil(input.scrollWidth) + 2}px`;
   }
-  function focusKeyTarget() {
-    if (inSettings) {
+  function shouldSkipKeyboardCapture() {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLInputElement)) {
+      return false;
+    }
+    if (active.id === "hud-launch-x" || active.id === "hud-launch-y") {
+      return true;
+    }
+    if (inValueMode && active.id === "value-input") {
+      return true;
+    }
+    if (active.dataset.bindingId) {
+      return true;
+    }
+    return false;
+  }
+  function ensureKeyboardCapture() {
+    if (shouldSkipKeyboardCapture()) {
+      return;
+    }
+    if (recordingBindingId) {
+      if (document.hasFocus()) {
+        capture.focus({ preventScroll: true });
+      }
       return;
     }
     const valueInput = document.getElementById(
@@ -1585,7 +1700,13 @@
       });
       return;
     }
+    if (!document.hasFocus()) {
+      return;
+    }
     capture.focus({ preventScroll: true });
+  }
+  function focusKeyTarget() {
+    ensureKeyboardCapture();
   }
   function wireValueInput(input) {
     input.addEventListener("keydown", handlePluginKeydown);
@@ -1650,11 +1771,28 @@
     row.appendChild(label);
     return row;
   }
+  function createBreadcrumbSeparator() {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", "4");
+    svg.setAttribute("height", "8");
+    svg.setAttribute("viewBox", "0 0 4 8");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("aria-hidden", "true");
+    svg.classList.add("breadcrumb-sep");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute(
+      "d",
+      "M0.146444 0.167363C0.341702 -0.0557877 0.658203 -0.0557877 0.853462 0.167363L3.8534 3.59584C4.04866 3.81899 4.04866 4.1807 3.8534 4.40386L0.853462 7.83233C0.658203 8.05548 0.341702 8.05548 0.146444 7.83233C-0.0488146 7.60918 -0.0488146 7.24747 0.146444 7.02432L2.79288 3.99985L0.146444 0.975377C-0.0488146 0.752226 -0.0488146 0.390514 0.146444 0.167363Z"
+    );
+    path.setAttribute("fill", "currentColor");
+    svg.appendChild(path);
+    return svg;
+  }
   function renderBreadcrumb(crumbs) {
     const wrap2 = el("div", "breadcrumb");
     crumbs.forEach((crumb, index) => {
       if (index > 0) {
-        wrap2.appendChild(el("span", "breadcrumb-sep"));
+        wrap2.appendChild(createBreadcrumbSeparator());
       }
       wrap2.appendChild(el("span", void 0, crumb));
     });
@@ -1676,14 +1814,14 @@
         list.appendChild(divider);
       }
       for (const binding of group.items) {
-        const row = document.createElement("div");
-        row.className = "binding-row";
+        const row = el("div", "settings-row");
         const label = document.createElement("label");
+        label.className = "settings-row-label";
         const path = bindingFullPath(binding.scope, binding.label);
         label.textContent = path;
         label.title = path;
-        const keyWrap = el("div", "binding-key-wrap");
         const input = document.createElement("input");
+        input.className = "settings-key-input";
         input.value = binding.key;
         input.readOnly = true;
         input.dataset.bindingId = binding.id;
@@ -1698,9 +1836,11 @@
             cancelBindingRecording(input, binding.key);
           }, 0);
         });
-        keyWrap.appendChild(input);
-        const defaultKey = (_a = DEFAULT_BINDINGS.find((item) => item.id === binding.id)) == null ? void 0 : _a.key;
-        appendRevertButton(keyWrap, {
+        row.append(label, input);
+        const defaultKey = (_a = DEFAULT_BINDINGS.find(
+          (item) => item.id === binding.id
+        )) == null ? void 0 : _a.key;
+        appendRevertSlot(row, {
           hidden: defaultKey === void 0 || binding.key === defaultKey,
           title: "Revert to default",
           onClick: () => {
@@ -1708,34 +1848,28 @@
           },
           dataset: { revertBindingId: binding.id }
         });
-        row.append(label, keyWrap);
         list.appendChild(row);
       }
     });
     return list;
   }
-  function buildHudSettingsSection(uiSpec) {
-    const section = el("div", "hud-settings");
-    section.appendChild(el("div", "settings-section-title", "HUD"));
-    const row = el("div", "binding-row");
-    const label = el("label", void 0, "Launch position");
-    const keyWrap = el("div", "binding-key-wrap");
-    keyWrap.appendChild(buildHudLaunchPositionFields(uiSpec));
-    appendRevertButton(keyWrap, {
-      hidden: !uiSpec.hasCustomHudPosition || Boolean(uiSpec.resetHudPositionDraft),
+  function buildHudLaunchPositionRow(uiSpec) {
+    const row = el("div", "settings-row");
+    const label = el("label", "settings-row-label", "HUD Launch Position");
+    row.append(label, buildHudLaunchPositionFields(uiSpec));
+    appendRevertSlot(row, {
+      hidden: !hudRevertVisible(uiSpec),
       title: "Reset launch position on save",
       onClick: () => {
         post({ type: "settings-draft-reset-hud" });
       },
       dataset: { revertHudPosition: "true" }
     });
-    row.append(label, keyWrap);
-    section.appendChild(row);
-    return section;
+    return row;
   }
   function buildSettingsView(uiSpec) {
     const wrap2 = el("div", "settings-view");
-    wrap2.appendChild(buildHudSettingsSection(uiSpec));
+    wrap2.appendChild(buildHudLaunchPositionRow(uiSpec));
     const divider = document.createElement("hr");
     divider.className = "settings-divider";
     wrap2.appendChild(divider);
@@ -1772,7 +1906,10 @@
       confirm.classList.remove("open");
     };
     saveButton.onclick = () => {
-      post({ type: "settings-save" });
+      const hud = readHudLaunchFieldsFromUi();
+      post(__spreadValues({
+        type: "settings-save"
+      }, hud ? { hudLaunchX: hud.x, hudLaunchY: hud.y } : {}));
     };
     return wrap2;
   }
@@ -1836,8 +1973,17 @@
     }
     return content;
   }
+  function updateScrollLayout(uiSpec) {
+    const scrollable = uiSpec.layout === "settings";
+    stackViewport.classList.toggle("stack-viewport--scroll", scrollable);
+    stackStage.classList.toggle("stack-stage--fill", !scrollable);
+    if (!scrollable) {
+      stackViewport.scrollTop = 0;
+    }
+  }
   function updateChrome(uiSpec) {
     var _a;
+    updateScrollLayout(uiSpec);
     breadcrumbHost.classList.add("hud-header");
     breadcrumbHost.replaceChildren();
     footerHost.replaceChildren();
@@ -1860,7 +2006,6 @@
       fromLayer.remove();
     }
     stackAnimating = false;
-    reportSize();
     focusKeyTarget();
   }
   async function animateStackTransition(transition, currentLayer, nextLayer) {
@@ -1907,7 +2052,6 @@
       return;
     }
     if (transition === "none" && syncSettingsInPlace(uiSpec)) {
-      reportSize();
       return;
     }
     const nextContent = buildContent(uiSpec);
@@ -1915,7 +2059,6 @@
     if (!canAnimate) {
       stackStage.replaceChildren();
       mountStackLayer(nextContent);
-      reportSize();
       focusKeyTarget();
       return;
     }
@@ -1934,8 +2077,6 @@
     }
     if (inSettings) {
       clearTimer();
-      lastReportedHeight = 0;
-      reportSize();
     } else if (!recordingBindingId) {
       focusKeyTarget();
     }
@@ -1976,6 +2117,10 @@
       return;
     }
     if (inSettings) {
+      const target = event.target;
+      if (target instanceof HTMLInputElement && (target.id === "hud-launch-x" || target.id === "hud-launch-y")) {
+        return;
+      }
       const key2 = formatKeyFromEvent(event);
       if (!key2 || ["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
         return;
@@ -1995,10 +2140,28 @@
     armTimer();
   }
   capture.addEventListener("keydown", handlePluginKeydown);
+  capture.addEventListener("blur", () => {
+    requestAnimationFrame(() => {
+      if (!document.hasFocus()) {
+        return;
+      }
+      ensureKeyboardCapture();
+    });
+  });
   window.addEventListener("keydown", handlePluginKeydown, true);
-  panel.addEventListener(
+  document.addEventListener(
     "pointerdown",
-    () => {
+    (event) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement && target.dataset.bindingId) {
+        return;
+      }
+      if (target instanceof HTMLInputElement && (target.id === "hud-launch-x" || target.id === "hud-launch-y")) {
+        return;
+      }
+      if (target instanceof HTMLButtonElement) {
+        return;
+      }
       focusKeyTarget();
     },
     true
@@ -2006,6 +2169,29 @@
   window.addEventListener("focus", () => {
     focusKeyTarget();
   });
+  window.setInterval(() => {
+    if (!document.hasFocus() || shouldSkipKeyboardCapture()) {
+      return;
+    }
+    if (recordingBindingId) {
+      if (document.activeElement !== capture) {
+        ensureKeyboardCapture();
+      }
+      return;
+    }
+    if (inValueMode) {
+      const valueInput = document.getElementById(
+        "value-input"
+      );
+      if (valueInput && document.activeElement !== valueInput) {
+        ensureKeyboardCapture();
+      }
+      return;
+    }
+    if (document.activeElement !== capture) {
+      ensureKeyboardCapture();
+    }
+  }, 300);
   window.onmessage = (event) => {
     const msg = event.data.pluginMessage;
     if (!msg) return;
@@ -2023,6 +2209,9 @@
         clearTimer();
         break;
       case "focus":
+        if (!document.hasFocus()) {
+          window.focus();
+        }
         focusKeyTarget();
         break;
       case "error":
