@@ -175,6 +175,7 @@
       }
 
       .value-input {
+        box-sizing: border-box;
         border: 1px solid var(--figma-color-border);
         border-radius: 10px;
         padding: 6px 12px;
@@ -189,8 +190,8 @@
         color: var(--figma-color-text);
         background: var(--figma-color-bg);
         align-self: flex-start;
-        min-width: 2ch;
-        width: auto;
+        width: 0;
+        min-width: 0;
         caret-color: var(--figma-color-text);
         outline: none;
         cursor: text;
@@ -1165,6 +1166,10 @@
     }
     return parts.join("+");
   }
+  function fitValueInputWidth(input) {
+    input.style.width = "0";
+    input.style.width = `${Math.ceil(input.scrollWidth) + 2}px`;
+  }
   function focusKeyTarget() {
     if (inSettings) {
       return;
@@ -1173,6 +1178,7 @@
       "value-input"
     );
     if (inValueMode && valueInput) {
+      fitValueInputWidth(valueInput);
       requestAnimationFrame(() => {
         valueInput.focus({ preventScroll: true });
         const length = valueInput.value.length;
@@ -1211,6 +1217,7 @@
     if (input.value !== nextValue) {
       input.value = nextValue;
     }
+    fitValueInputWidth(input);
     focusKeyTarget();
     return true;
   }

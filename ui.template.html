@@ -175,6 +175,7 @@
       }
 
       .value-input {
+        box-sizing: border-box;
         border: 1px solid var(--figma-color-border);
         border-radius: 10px;
         padding: 6px 12px;
@@ -189,8 +190,8 @@
         color: var(--figma-color-text);
         background: var(--figma-color-bg);
         align-self: flex-start;
-        min-width: 2ch;
-        width: auto;
+        width: 0;
+        min-width: 0;
         caret-color: var(--figma-color-text);
         outline: none;
         cursor: text;

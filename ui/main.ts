@@ -85,6 +85,12 @@ function formatKeyFromEvent(event: KeyboardEvent): string {
   return parts.join("+");
 }
 
+function fitValueInputWidth(input: HTMLInputElement): void {
+  input.style.width = "0";
+  // scrollWidth can under-measure glyph bounds by ~1px; small buffer avoids clipping
+  input.style.width = `${Math.ceil(input.scrollWidth) + 2}px`;
+}
+
 function focusKeyTarget(): void {
   if (inSettings) {
     return;
@@ -93,6 +99,7 @@ function focusKeyTarget(): void {
     "value-input",
   ) as HTMLInputElement | null;
   if (inValueMode && valueInput) {
+    fitValueInputWidth(valueInput);
     requestAnimationFrame(() => {
       valueInput.focus({ preventScroll: true });
       const length = valueInput.value.length;
@@ -134,6 +141,7 @@ function syncValueInputInPlace(uiSpec: UiSpec): boolean {
   if (input.value !== nextValue) {
     input.value = nextValue;
   }
+  fitValueInputWidth(input);
   focusKeyTarget();
   return true;
 }
