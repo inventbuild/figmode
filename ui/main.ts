@@ -25,7 +25,7 @@ const STACK_DURATION = 0.22;
 const STACK_EASING = [0.2, 0, 0, 1] as [number, number, number, number];
 
 let timeoutMs = 1000;
-let timeoutEnabled = true;
+let timeoutEnabled = false;
 let timeoutId: ReturnType<typeof setTimeout> | null = null;
 let inSettings = false;
 let inValueMode = false;
@@ -132,7 +132,9 @@ function syncValueInputInPlace(uiSpec: UiSpec): boolean {
   if (uiSpec.layout !== "value") {
     return false;
   }
-  const input = document.getElementById("value-input") as HTMLInputElement | null;
+  const input = document.getElementById(
+    "value-input",
+  ) as HTMLInputElement | null;
   if (!input) {
     return false;
   }
@@ -480,7 +482,6 @@ function applyState(
     lastReportedHeight = 0;
     reportSize();
   } else {
-    armTimer();
     focusKeyTarget();
   }
 }
@@ -529,6 +530,13 @@ window.addEventListener("blur", () => {
     }
   }, 0);
 });
+
+// panel.addEventListener("pointerdown", () => {
+//   focusKeyTarget();
+// });
+// window.addEventListener("focus", () => {
+//   focusKeyTarget();
+// });
 
 window.onmessage = (event: MessageEvent) => {
   const msg = event.data.pluginMessage as PluginToUiMessage | undefined;

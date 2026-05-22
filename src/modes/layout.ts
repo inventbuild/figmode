@@ -175,13 +175,17 @@ export function applyNumericValue(
   }
 
   if (kind === "width") {
-    frame.layoutSizingHorizontal = "FIXED";
+    if (frame.layoutMode !== "NONE") {
+      frame.layoutSizingHorizontal = "FIXED";
+    }
     frame.resize(value, frame.height);
     return true;
   }
 
   if (kind === "height") {
-    frame.layoutSizingVertical = "FIXED";
+    if (frame.layoutMode !== "NONE") {
+      frame.layoutSizingVertical = "FIXED";
+    }
     frame.resize(frame.width, value);
     return true;
   }

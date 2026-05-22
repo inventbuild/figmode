@@ -33,10 +33,18 @@ import {
   toggleWrap,
 } from "./modes/layout";
 import {
+  isBindingAvailable,
+  isFreeform,
+  sizingSubmodeBindingIds,
+} from "./layout-capabilities";
+import {
   prepareLayoutTarget,
+  getActiveLayoutTarget,
   requireAutoLayoutFrame,
+  requireLayoutTarget,
   setActiveLayoutTarget,
 } from "./target";
+import type { LayoutTarget } from "./target";
 import { buildUiSpec, UI_LAYOUT_FRAME_HEIGHT, UI_WIDTH } from "./ui-spec";
 import { HUD_INSET, HUD_RESIZE_THRESHOLD } from "./hud-config";
 
@@ -126,7 +134,8 @@ function postToUi(message: PluginToUiMessage): void {
 }
 
 function syncUi(): void {
-  const uiSpec = buildUiSpec(state, bindings);
+  const frame = getActiveLayoutTarget();
+  const uiSpec = buildUiSpec(state, bindings, frame);
   const transition = getStackTransition(state);
   const inSettings = inSettingsMode(state);
   const settingsBoundaryChanged = inSettings !== previousInSettings;
@@ -165,9 +174,20 @@ function parseValueBuffer(raw: string): number | null {
   return value;
 }
 
+function frameForValueEntry(valueKind: ValueKind): LayoutTarget | null {
+  const frame = requireLayoutTarget();
+  if (!frame) {
+    return null;
+  }
+  if (valueKind === "width" || valueKind === "height") {
+    return frame;
+  }
+  return requireAutoLayoutFrame();
+}
+
 function liveApplyValueBuffer(buffer: string): boolean {
   const top = state.stack[state.stack.length - 1];
-  const frame = requireAutoLayoutFrame();
+  const frame = top?.valueKind ? frameForValueEntry(top.valueKind) : null;
   if (!top?.valueKind || !frame) {
     return false;
   }
@@ -184,7 +204,7 @@ function enterValueKindOnState(
   current: FigmodeState,
   valueKind: ValueKind,
 ): FigmodeState {
-  const frame = requireAutoLayoutFrame();
+  const frame = frameForValueEntry(valueKind);
   if (!frame) {
     bindingError("Layout target is no longer available.");
     return current;
@@ -205,9 +225,40 @@ function enterValueKind(valueKind: ValueKind): FigmodeState {
   return enterValueKindOnState(state, valueKind);
 }
 
+function enterDirectSizingValue(
+  current: FigmodeState,
+  dimension: "width" | "height",
+): FigmodeState {
+  const frame = frameForValueEntry(dimension);
+  if (!frame) {
+    bindingError("Layout target is no longer available.");
+    return current;
+  }
+
+  return {
+    ...current,
+    stack: [
+      ...current.stack,
+      { mode: "layout", submode: dimension, valueKind: dimension },
+    ],
+    valueBuffer: String(getValueForKind(frame, dimension)),
+  };
+}
+
+function enterSizingSubmode(
+  current: FigmodeState,
+  frame: LayoutTarget,
+  dimension: "width" | "height",
+): FigmodeState {
+  if (sizingSubmodeBindingIds(dimension, frame).length === 1) {
+    return enterDirectSizingValue(current, dimension);
+  }
+  return pushSubmode(current, dimension);
+}
+
 function handleValueKey(key: string): FigmodeState {
   const top = state.stack[state.stack.length - 1];
-  const frame = requireAutoLayoutFrame();
+  const frame = top?.valueKind ? frameForValueEntry(top.valueKind) : null;
   if (!top?.valueKind || !frame) {
     return state;
   }
@@ -260,7 +311,7 @@ function handleValueKey(key: string): FigmodeState {
 }
 
 function runLayoutBinding(binding: KeyBinding): FigmodeState {
-  const frame = requireAutoLayoutFrame();
+  const frame = requireLayoutTarget();
   if (!frame) {
     bindingError("Layout target is no longer available.");
     return state;
@@ -279,10 +330,24 @@ function runLayoutBinding(binding: KeyBinding): FigmodeState {
     case "layout.flow.grid":
       setFlow(frame, "GRID");
       return state;
+  }
+
+  if (isFreeform(frame)) {
+    switch (binding.id) {
+      case "layout.submode.width":
+        return enterDirectSizingValue(state, "width");
+      case "layout.submode.height":
+        return enterDirectSizingValue(state, "height");
+      default:
+        return state;
+    }
+  }
+
+  switch (binding.id) {
     case "layout.submode.width":
-      return pushSubmode(state, "width");
+      return enterSizingSubmode(state, frame, "width");
     case "layout.submode.height":
-      return pushSubmode(state, "height");
+      return enterSizingSubmode(state, frame, "height");
     case "layout.submode.alignment":
       return pushSubmode(state, "alignment");
     case "layout.submode.spacing": {
@@ -395,6 +460,11 @@ async function handleKeydown(key: string): Promise<void> {
 
   if (!binding) return;
 
+  const frame = getActiveLayoutTarget();
+  if (!isBindingAvailable(binding.id, frame)) {
+    return;
+  }
+
   state = runLayoutBinding(binding);
   syncUi();
 }
@@ -432,7 +502,8 @@ figma.on("run", async ({ command }: RunEvent) => {
 figma.ui.onmessage = async (msg: UiToPluginMessage) => {
   switch (msg.type) {
     case "ready": {
-      const uiSpec = buildUiSpec(state, bindings);
+      const frame = getActiveLayoutTarget();
+      const uiSpec = buildUiSpec(state, bindings, frame);
       postToUi({
         type: "init",
         state,

@@ -1,7 +1,13 @@
 import type { FigmodeState, KeyBinding, UiKeyItem, UiSpec } from "./types";
 import { groupBindingsByScope } from "./binding-scope";
+import {
+  isAutoLayout,
+  layoutRootBindingIds,
+  sizingSubmodeBindingIds,
+} from "./layout-capabilities";
 import { getCurrentScope, inSettingsMode, inValueEntry } from "./mode-stack";
 import { bindingsMatchSaved } from "./settings";
+import type { LayoutTarget } from "./target";
 
 /** Fixed HUD width — sized for the alignment grid (widest view). */
 export const UI_WIDTH = 340;
@@ -174,6 +180,7 @@ function orderedKeys(
 export function buildUiSpec(
   state: FigmodeState,
   bindings: KeyBinding[],
+  frame: LayoutTarget | null = null,
 ): UiSpec {
   const footer = footerKeys(bindings);
   const breadcrumb = getBreadcrumb(state);
@@ -215,17 +222,31 @@ export function buildUiSpec(
   const scope = getCurrentScope(state.stack);
 
   if (scope === "layout") {
+    const allowed = frame
+      ? new Set(layoutRootBindingIds(frame))
+      : new Set([...LAYOUT_LEFT_ORDER, ...LAYOUT_RIGHT_ORDER]);
+    const leftIds = LAYOUT_LEFT_ORDER.filter((id) => allowed.has(id));
+    const rightIds = LAYOUT_RIGHT_ORDER.filter((id) => allowed.has(id));
     return {
       layout: "twoColumn",
       breadcrumb,
-      left: orderedKeys(bindings, LAYOUT_LEFT_ORDER),
-      right: orderedKeys(bindings, LAYOUT_RIGHT_ORDER, true),
+      left: orderedKeys(bindings, leftIds),
+      right: orderedKeys(bindings, rightIds, true),
       footer,
       height: UI_HEIGHT.twoColumn,
     };
   }
 
   if (scope === "layout.alignment") {
+    if (!frame || !isAutoLayout(frame)) {
+      return {
+        layout: "list",
+        breadcrumb,
+        items: [],
+        footer,
+        height: UI_HEIGHT.list,
+      };
+    }
     const rows = ALIGNMENT_GRID.map((row) =>
       row
         .map((id) => bindingById(bindings, id))
@@ -242,6 +263,15 @@ export function buildUiSpec(
   }
 
   if (scope === "layout.padding") {
+    if (!frame || !isAutoLayout(frame)) {
+      return {
+        layout: "list",
+        breadcrumb,
+        items: [],
+        footer,
+        height: UI_HEIGHT.list,
+      };
+    }
     const columns: UiKeyItem[][] = [
       orderedKeys(bindings, [
         "layout.padding.paddingX",
@@ -266,9 +296,23 @@ export function buildUiSpec(
     };
   }
 
-  const scopeBindings = bindingsForScope(bindings, scope).map((binding) =>
-    toUiKey(binding),
-  );
+  const scopeBindings = bindingsForScope(bindings, scope)
+    .filter((binding) => {
+      if (!frame) {
+        return true;
+      }
+      if (scope === "layout.width") {
+        return sizingSubmodeBindingIds("width", frame).includes(binding.id);
+      }
+      if (scope === "layout.height") {
+        return sizingSubmodeBindingIds("height", frame).includes(binding.id);
+      }
+      if (scope === "layout.spacing") {
+        return isAutoLayout(frame);
+      }
+      return true;
+    })
+    .map((binding) => toUiKey(binding));
 
   return {
     layout: "list",

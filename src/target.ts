@@ -190,6 +190,10 @@ export function prepareLayoutTarget(): LayoutTarget | null {
   return wrapNodesInAutoLayout(nodes);
 }
 
+export function requireLayoutTarget(): LayoutTarget | null {
+  return getActiveLayoutTarget();
+}
+
 export function requireAutoLayoutFrame(): LayoutTarget | null {
   const target = getActiveLayoutTarget();
   if (!target || target.layoutMode === "NONE") {

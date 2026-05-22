@@ -319,15 +319,15 @@
     <script>
       "use strict";
 (() => {
-  // node_modules/@motionone/utils/dist/array.es.js
+  // node_modules/.pnpm/@motionone+utils@10.18.0/node_modules/@motionone/utils/dist/array.es.js
   function addUniqueItem(array, item) {
     array.indexOf(item) === -1 && array.push(item);
   }
 
-  // node_modules/@motionone/utils/dist/clamp.es.js
+  // node_modules/.pnpm/@motionone+utils@10.18.0/node_modules/@motionone/utils/dist/clamp.es.js
   var clamp = (min, max, v) => Math.min(Math.max(v, min), max);
 
-  // node_modules/@motionone/utils/dist/defaults.es.js
+  // node_modules/.pnpm/@motionone+utils@10.18.0/node_modules/@motionone/utils/dist/defaults.es.js
   var defaults = {
     duration: 0.3,
     delay: 0,
@@ -336,35 +336,35 @@
     easing: "ease"
   };
 
-  // node_modules/@motionone/utils/dist/is-number.es.js
+  // node_modules/.pnpm/@motionone+utils@10.18.0/node_modules/@motionone/utils/dist/is-number.es.js
   var isNumber = (value) => typeof value === "number";
 
-  // node_modules/@motionone/utils/dist/is-easing-list.es.js
+  // node_modules/.pnpm/@motionone+utils@10.18.0/node_modules/@motionone/utils/dist/is-easing-list.es.js
   var isEasingList = (easing) => Array.isArray(easing) && !isNumber(easing[0]);
 
-  // node_modules/@motionone/utils/dist/wrap.es.js
+  // node_modules/.pnpm/@motionone+utils@10.18.0/node_modules/@motionone/utils/dist/wrap.es.js
   var wrap = (min, max, v) => {
     const rangeSize = max - min;
     return ((v - min) % rangeSize + rangeSize) % rangeSize + min;
   };
 
-  // node_modules/@motionone/utils/dist/easing.es.js
+  // node_modules/.pnpm/@motionone+utils@10.18.0/node_modules/@motionone/utils/dist/easing.es.js
   function getEasingForSegment(easing, i) {
     return isEasingList(easing) ? easing[wrap(0, easing.length, i)] : easing;
   }
 
-  // node_modules/@motionone/utils/dist/mix.es.js
+  // node_modules/.pnpm/@motionone+utils@10.18.0/node_modules/@motionone/utils/dist/mix.es.js
   var mix = (min, max, progress2) => -progress2 * min + progress2 * max + min;
 
-  // node_modules/@motionone/utils/dist/noop.es.js
+  // node_modules/.pnpm/@motionone+utils@10.18.0/node_modules/@motionone/utils/dist/noop.es.js
   var noop = () => {
   };
   var noopReturn = (v) => v;
 
-  // node_modules/@motionone/utils/dist/progress.es.js
+  // node_modules/.pnpm/@motionone+utils@10.18.0/node_modules/@motionone/utils/dist/progress.es.js
   var progress = (min, max, value) => max - min === 0 ? 1 : (value - min) / (max - min);
 
-  // node_modules/@motionone/utils/dist/offset.es.js
+  // node_modules/.pnpm/@motionone+utils@10.18.0/node_modules/@motionone/utils/dist/offset.es.js
   function fillOffset(offset, remaining) {
     const min = offset[offset.length - 1];
     for (let i = 1; i <= remaining; i++) {
@@ -378,7 +378,7 @@
     return offset;
   }
 
-  // node_modules/@motionone/utils/dist/interpolate.es.js
+  // node_modules/.pnpm/@motionone+utils@10.18.0/node_modules/@motionone/utils/dist/interpolate.es.js
   function interpolate(output, input = defaultOffset(output.length), easing = noopReturn) {
     const length = output.length;
     const remainder = length - input.length;
@@ -396,25 +396,25 @@
     };
   }
 
-  // node_modules/@motionone/utils/dist/is-cubic-bezier.es.js
+  // node_modules/.pnpm/@motionone+utils@10.18.0/node_modules/@motionone/utils/dist/is-cubic-bezier.es.js
   var isCubicBezier = (easing) => Array.isArray(easing) && isNumber(easing[0]);
 
-  // node_modules/@motionone/utils/dist/is-easing-generator.es.js
+  // node_modules/.pnpm/@motionone+utils@10.18.0/node_modules/@motionone/utils/dist/is-easing-generator.es.js
   var isEasingGenerator = (easing) => typeof easing === "object" && Boolean(easing.createAnimation);
 
-  // node_modules/@motionone/utils/dist/is-function.es.js
+  // node_modules/.pnpm/@motionone+utils@10.18.0/node_modules/@motionone/utils/dist/is-function.es.js
   var isFunction = (value) => typeof value === "function";
 
-  // node_modules/@motionone/utils/dist/is-string.es.js
+  // node_modules/.pnpm/@motionone+utils@10.18.0/node_modules/@motionone/utils/dist/is-string.es.js
   var isString = (value) => typeof value === "string";
 
-  // node_modules/@motionone/utils/dist/time.es.js
+  // node_modules/.pnpm/@motionone+utils@10.18.0/node_modules/@motionone/utils/dist/time.es.js
   var time = {
     ms: (seconds) => seconds * 1e3,
     s: (milliseconds) => milliseconds / 1e3
   };
 
-  // node_modules/@motionone/easing/dist/cubic-bezier.es.js
+  // node_modules/.pnpm/@motionone+easing@10.18.0/node_modules/@motionone/easing/dist/cubic-bezier.es.js
   var calcBezier = (t, a1, a2) => (((1 - 3 * a2 + 3 * a1) * t + (3 * a2 - 6 * a1)) * t + 3 * a1) * t;
   var subdivisionPrecision = 1e-7;
   var subdivisionMaxIterations = 12;
@@ -440,7 +440,7 @@
     return (t) => t === 0 || t === 1 ? t : calcBezier(getTForX(t), mY1, mY2);
   }
 
-  // node_modules/@motionone/easing/dist/steps.es.js
+  // node_modules/.pnpm/@motionone+easing@10.18.0/node_modules/@motionone/easing/dist/steps.es.js
   var steps = (steps2, direction = "end") => (progress2) => {
     progress2 = direction === "end" ? Math.min(progress2, 0.999) : Math.max(progress2, 1e-3);
     const expanded = progress2 * steps2;
@@ -448,7 +448,7 @@
     return clamp(0, 1, rounded / steps2);
   };
 
-  // node_modules/@motionone/animation/dist/utils/easing.es.js
+  // node_modules/.pnpm/@motionone+animation@10.18.0/node_modules/@motionone/animation/dist/utils/easing.es.js
   var namedEasings = {
     ease: cubicBezier(0.25, 0.1, 0.25, 1),
     "ease-in": cubicBezier(0.42, 0, 1, 1),
@@ -474,7 +474,7 @@
     return noopReturn;
   }
 
-  // node_modules/@motionone/animation/dist/Animation.es.js
+  // node_modules/.pnpm/@motionone+animation@10.18.0/node_modules/@motionone/animation/dist/Animation.es.js
   var Animation = class {
     constructor(output, keyframes = [0, 1], { easing, duration: initialDuration = defaults.duration, delay = defaults.delay, endDelay = defaults.endDelay, repeat = defaults.repeat, offset, direction = "normal", autoplay = true } = {}) {
       this.startTime = null;
@@ -600,7 +600,7 @@
     }
   };
 
-  // node_modules/hey-listen/dist/hey-listen.es.js
+  // node_modules/.pnpm/hey-listen@1.0.8/node_modules/hey-listen/dist/hey-listen.es.js
   var warning = function() {
   };
   var invariant = function() {
@@ -618,7 +618,7 @@
     };
   }
 
-  // node_modules/@motionone/types/dist/MotionValue.es.js
+  // node_modules/.pnpm/@motionone+types@10.17.1/node_modules/@motionone/types/dist/MotionValue.es.js
   var MotionValue = class {
     setAnimation(animation) {
       this.animation = animation;
@@ -630,7 +630,7 @@
     }
   };
 
-  // node_modules/@motionone/dom/dist/animate/data.es.js
+  // node_modules/.pnpm/@motionone+dom@10.18.0/node_modules/@motionone/dom/dist/animate/data.es.js
   var data = /* @__PURE__ */ new WeakMap();
   function getAnimationData(element) {
     if (!data.has(element)) {
@@ -648,7 +648,7 @@
     return motionValues.get(name);
   }
 
-  // node_modules/@motionone/dom/dist/animate/utils/transforms.es.js
+  // node_modules/.pnpm/@motionone+dom@10.18.0/node_modules/@motionone/dom/dist/animate/utils/transforms.es.js
   var axes = ["", "X", "Y", "Z"];
   var order = ["translate", "scale", "rotate", "skew"];
   var transformAlias = {
@@ -697,7 +697,7 @@
   var buildTransformTemplate = (transforms2) => transforms2.sort(compareTransformOrder).reduce(transformListToString, "").trim();
   var transformListToString = (template, name) => `${template} ${name}(var(${asTransformCssVar(name)}))`;
 
-  // node_modules/@motionone/dom/dist/animate/utils/css-var.es.js
+  // node_modules/.pnpm/@motionone+dom@10.18.0/node_modules/@motionone/dom/dist/animate/utils/css-var.es.js
   var isCssVar = (name) => name.startsWith("--");
   var registeredProperties = /* @__PURE__ */ new Set();
   function registerCssVariable(name) {
@@ -716,7 +716,7 @@
     }
   }
 
-  // node_modules/@motionone/dom/dist/animate/utils/feature-detection.es.js
+  // node_modules/.pnpm/@motionone+dom@10.18.0/node_modules/@motionone/dom/dist/animate/utils/feature-detection.es.js
   var testAnimation = (keyframes, options) => document.createElement("div").animate(keyframes, options);
   var featureTests = {
     cssRegisterProperty: () => typeof CSS !== "undefined" && Object.hasOwnProperty.call(CSS, "registerProperty"),
@@ -749,7 +749,7 @@
     };
   }
 
-  // node_modules/@motionone/dom/dist/animate/utils/easing.es.js
+  // node_modules/.pnpm/@motionone+dom@10.18.0/node_modules/@motionone/dom/dist/animate/utils/easing.es.js
   var resolution = 0.015;
   var generateLinearEasingPoints = (easing, duration) => {
     let points = "";
@@ -768,7 +768,7 @@
   };
   var cubicBezierAsString = ([a, b, c, d]) => `cubic-bezier(${a}, ${b}, ${c}, ${d})`;
 
-  // node_modules/@motionone/dom/dist/animate/utils/keyframes.es.js
+  // node_modules/.pnpm/@motionone+dom@10.18.0/node_modules/@motionone/dom/dist/animate/utils/keyframes.es.js
   function hydrateKeyframes(keyframes, readInitialValue) {
     for (let i = 0; i < keyframes.length; i++) {
       if (keyframes[i] === null) {
@@ -779,14 +779,14 @@
   }
   var keyframesList = (keyframes) => Array.isArray(keyframes) ? keyframes : [keyframes];
 
-  // node_modules/@motionone/dom/dist/animate/utils/get-style-name.es.js
+  // node_modules/.pnpm/@motionone+dom@10.18.0/node_modules/@motionone/dom/dist/animate/utils/get-style-name.es.js
   function getStyleName(key) {
     if (transformAlias[key])
       key = transformAlias[key];
     return isTransform(key) ? asTransformCssVar(key) : key;
   }
 
-  // node_modules/@motionone/dom/dist/animate/style.es.js
+  // node_modules/.pnpm/@motionone+dom@10.18.0/node_modules/@motionone/dom/dist/animate/style.es.js
   var style = {
     get: (element, name) => {
       name = getStyleName(name);
@@ -808,7 +808,7 @@
     }
   };
 
-  // node_modules/@motionone/dom/dist/animate/utils/stop-animation.es.js
+  // node_modules/.pnpm/@motionone+dom@10.18.0/node_modules/@motionone/dom/dist/animate/utils/stop-animation.es.js
   function stopAnimation(animation, needsCommit = true) {
     if (!animation || animation.playState === "finished")
       return;
@@ -823,7 +823,7 @@
     }
   }
 
-  // node_modules/@motionone/dom/dist/animate/utils/get-unit.es.js
+  // node_modules/.pnpm/@motionone+dom@10.18.0/node_modules/@motionone/dom/dist/animate/utils/get-unit.es.js
   function getUnitConverter(keyframes, definition) {
     var _a;
     let toUnit = (definition === null || definition === void 0 ? void 0 : definition.toDefaultUnit) || noopReturn;
@@ -836,7 +836,7 @@
     return toUnit;
   }
 
-  // node_modules/@motionone/dom/dist/animate/animate-style.es.js
+  // node_modules/.pnpm/@motionone+dom@10.18.0/node_modules/@motionone/dom/dist/animate/animate-style.es.js
   function getDevToolsRecord() {
     return window.__MOTION_DEV_TOOLS_RECORD;
   }
@@ -943,7 +943,7 @@
     };
   }
 
-  // node_modules/@motionone/dom/dist/animate/utils/options.es.js
+  // node_modules/.pnpm/@motionone+dom@10.18.0/node_modules/@motionone/dom/dist/animate/utils/options.es.js
   var getOptions = (options, key) => (
     /**
      * TODO: Make test for this
@@ -953,7 +953,7 @@
     options[key] ? Object.assign(Object.assign({}, options), options[key]) : Object.assign({}, options)
   );
 
-  // node_modules/@motionone/dom/dist/utils/resolve-elements.es.js
+  // node_modules/.pnpm/@motionone+dom@10.18.0/node_modules/@motionone/dom/dist/utils/resolve-elements.es.js
   function resolveElements(elements, selectorCache) {
     var _a;
     if (typeof elements === "string") {
@@ -969,7 +969,7 @@
     return Array.from(elements || []);
   }
 
-  // node_modules/@motionone/dom/dist/animate/utils/controls.es.js
+  // node_modules/.pnpm/@motionone+dom@10.18.0/node_modules/@motionone/dom/dist/animate/utils/controls.es.js
   var createAnimation = (factory) => factory();
   var withControls = (animationFactory, options, duration = defaults.duration) => {
     return new Proxy({
@@ -1023,12 +1023,12 @@
   };
   var selectFinished = (animation) => animation.finished;
 
-  // node_modules/@motionone/dom/dist/utils/stagger.es.js
+  // node_modules/.pnpm/@motionone+dom@10.18.0/node_modules/@motionone/dom/dist/utils/stagger.es.js
   function resolveOption(option, i, total) {
     return isFunction(option) ? option(i, total) : option;
   }
 
-  // node_modules/@motionone/dom/dist/animate/create-animate.es.js
+  // node_modules/.pnpm/@motionone+dom@10.18.0/node_modules/@motionone/dom/dist/animate/create-animate.es.js
   function createAnimate(AnimatePolyfill) {
     return function animate2(elements, keyframes, options = {}) {
       elements = resolveElements(elements);
@@ -1062,7 +1062,7 @@
     };
   }
 
-  // node_modules/@motionone/dom/dist/animate/index.es.js
+  // node_modules/.pnpm/@motionone+dom@10.18.0/node_modules/@motionone/dom/dist/animate/index.es.js
   var animate = createAnimate(Animation);
 
   // src/binding-scope.ts
@@ -1114,7 +1114,7 @@
   var STACK_DURATION = 0.22;
   var STACK_EASING = [0.2, 0, 0, 1];
   var timeoutMs = 1e3;
-  var timeoutEnabled = true;
+  var timeoutEnabled = false;
   var timeoutId = null;
   var inSettings = false;
   var inValueMode = false;
@@ -1209,7 +1209,9 @@
     if (uiSpec.layout !== "value") {
       return false;
     }
-    const input = document.getElementById("value-input");
+    const input = document.getElementById(
+      "value-input"
+    );
     if (!input) {
       return false;
     }
@@ -1494,7 +1496,6 @@
       lastReportedHeight = 0;
       reportSize();
     } else {
-      armTimer();
       focusKeyTarget();
     }
   }
