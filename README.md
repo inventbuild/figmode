@@ -26,7 +26,15 @@ Changes apply live as you type. In value entry, digits update the frame immediat
 | --------- | ----------------------------------------- |
 | `` ` ``   | Back one mode (at root, closes Figmode)   |
 | `Esc`     | Quit                                      |
-| `Shift+S` | Settings — remap keys (does not time out) |
+| `Shift+S` | Open settings |
+
+## Settings
+
+Press **Shift+S** from any mode to open the settings screen. It lists every binding grouped by mode (layout, width, alignment, etc.).
+
+To change a key, click its field and press the new key combo. Edits are kept as a draft until you click **Save** — the **Save** button only appears when something has changed. Use **Reset to defaults** to revert the draft to the built-in bindings (you’ll be asked to confirm); nothing is permanent until you save.
+
+Press `` ` `` to leave settings without saving, or **Esc** to quit Figmode entirely. Saved bindings persist across sessions.
 
 ## Layout mode
 
