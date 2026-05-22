@@ -1,5 +1,6 @@
 import { animate } from "@motionone/dom";
 import { bindingFullPath, groupBindingsByScope } from "../src/binding-scope";
+import { DEFAULT_BINDINGS } from "../src/key-bindings";
 import type {
   KeyBinding,
   PluginToUiMessage,
@@ -30,12 +31,80 @@ let timeoutId: ReturnType<typeof setTimeout> | null = null;
 let inSettings = false;
 let inValueMode = false;
 let recordingBindingId: string | null = null;
+let lastUiSpec: UiSpec | null = null;
 let lastReportedHeight = 0;
 let reportSizeFrameId: number | null = null;
 let stackAnimating = false;
 const reduceMotion = window.matchMedia(
   "(prefers-reduced-motion: reduce)",
 ).matches;
+
+function startBindingRecording(bindingId: string, input: HTMLInputElement): void {
+  recordingBindingId = bindingId;
+  input.classList.add("recording");
+  input.value = "Press a key…";
+  requestAnimationFrame(() => capture.focus({ preventScroll: true }));
+}
+
+function cancelBindingRecording(input: HTMLInputElement, bindingKey: string): void {
+  if (recordingBindingId !== input.dataset.bindingId) {
+    return;
+  }
+  recordingBindingId = null;
+  input.classList.remove("recording");
+  input.value = bindingKey;
+}
+
+function syncSettingsInPlace(uiSpec: UiSpec): boolean {
+  if (uiSpec.layout !== "settings") {
+    return false;
+  }
+
+  const saveButton = document.getElementById(
+    "save-bindings",
+  ) as HTMLButtonElement | null;
+  if (saveButton) {
+    saveButton.hidden = !uiSpec.settingsDirty;
+  }
+
+  for (const binding of uiSpec.bindings || []) {
+    const input = document.querySelector(
+      `input[data-binding-id="${binding.id}"]`,
+    ) as HTMLInputElement | null;
+    const revert = document.querySelector(
+      `button[data-revert-binding-id="${binding.id}"]`,
+    ) as HTMLButtonElement | null;
+    const defaultKey = DEFAULT_BINDINGS.find((item) => item.id === binding.id)?.key;
+    const differs =
+      defaultKey !== undefined && binding.key !== defaultKey;
+
+    if (input && recordingBindingId !== binding.id) {
+      input.value = binding.key;
+      input.classList.remove("recording");
+    }
+    if (revert) {
+      revert.hidden = !differs;
+    }
+  }
+
+  const insetInput = document.getElementById(
+    "hud-inset-input",
+  ) as HTMLInputElement | null;
+  if (insetInput && document.activeElement !== insetInput) {
+    insetInput.value = String(uiSpec.hudInset ?? uiSpec.defaultHudInset ?? 30);
+  }
+
+  const resetHudButton = document.getElementById(
+    "reset-hud-position",
+  ) as HTMLButtonElement | null;
+  if (resetHudButton) {
+    resetHudButton.textContent = uiSpec.resetHudPositionDraft
+      ? "Reset HUD on save"
+      : "Reset HUD position";
+  }
+
+  return true;
+}
 
 function post(message: UiToPluginMessage): void {
   parent.postMessage({ pluginMessage: message }, "*");
@@ -224,30 +293,86 @@ function renderBindingRows(bindings: KeyBinding[]): HTMLDivElement {
       label.textContent = path;
       label.title = path;
 
+      const keyWrap = el("div", "binding-key-wrap");
       const input = document.createElement("input");
       input.value = binding.key;
       input.readOnly = true;
       input.dataset.bindingId = binding.id;
       input.addEventListener("focus", () => {
-        recordingBindingId = binding.id;
-        input.value = "Press a key…";
+        startBindingRecording(binding.id, input);
       });
       input.addEventListener("blur", () => {
-        if (recordingBindingId === binding.id) {
-          recordingBindingId = null;
-          input.value = binding.key;
-        }
+        window.setTimeout(() => {
+          if (document.activeElement === capture) {
+            return;
+          }
+          cancelBindingRecording(input, binding.key);
+        }, 0);
       });
+      keyWrap.appendChild(input);
 
-      row.append(label, input);
+      const defaultKey = DEFAULT_BINDINGS.find((item) => item.id === binding.id)?.key;
+      const revert = el("button", "binding-revert", "↩");
+      revert.type = "button";
+      revert.title = "Revert to default";
+      revert.dataset.revertBindingId = binding.id;
+      revert.hidden =
+        defaultKey === undefined || binding.key === defaultKey;
+      revert.onclick = () => {
+        post({ type: "settings-draft-reset-binding", bindingId: binding.id });
+      };
+      keyWrap.appendChild(revert);
+
+      row.append(label, keyWrap);
       list.appendChild(row);
     }
   });
   return list;
 }
 
+function buildHudSettingsSection(uiSpec: UiSpec): HTMLDivElement {
+  const section = el("div", "hud-settings");
+  section.appendChild(el("div", "settings-section-title", "HUD"));
+
+  const insetRow = el("div", "binding-row");
+  const insetLabel = el("label", undefined, "Default inset (px)");
+  const insetInput = document.createElement("input");
+  insetInput.type = "number";
+  insetInput.min = "0";
+  insetInput.id = "hud-inset-input";
+  insetInput.value = String(uiSpec.hudInset ?? uiSpec.defaultHudInset ?? 30);
+  insetInput.addEventListener("change", () => {
+    const inset = Number.parseInt(insetInput.value, 10);
+    if (Number.isNaN(inset)) {
+      return;
+    }
+    post({ type: "settings-draft-hud-inset", inset });
+  });
+
+  const insetWrap = el("div", "binding-key-wrap");
+  insetWrap.appendChild(insetInput);
+  insetRow.append(insetLabel, insetWrap);
+
+  const resetHudButton = el("button", undefined, "Reset HUD position");
+  resetHudButton.type = "button";
+  resetHudButton.id = "reset-hud-position";
+  if (uiSpec.resetHudPositionDraft) {
+    resetHudButton.textContent = "Reset HUD on save";
+  }
+  resetHudButton.onclick = () => {
+    post({ type: "settings-draft-reset-hud" });
+  };
+
+  section.append(insetRow, resetHudButton);
+  return section;
+}
+
 function buildSettingsView(uiSpec: UiSpec): HTMLDivElement {
   const wrap = el("div", "settings-view");
+  wrap.appendChild(buildHudSettingsSection(uiSpec));
+  const divider = document.createElement("hr");
+  divider.className = "settings-divider";
+  wrap.appendChild(divider);
   wrap.appendChild(renderBindingRows(uiSpec.bindings || []));
 
   const actions = el("div", "settings-actions");
@@ -359,6 +484,7 @@ function buildContent(uiSpec: UiSpec): HTMLDivElement {
 }
 
 function updateChrome(uiSpec: UiSpec): void {
+  breadcrumbHost.classList.add("hud-header");
   breadcrumbHost.replaceChildren();
   footerHost.replaceChildren();
   if (uiSpec.breadcrumb?.length) {
@@ -441,6 +567,11 @@ function setStackContent(uiSpec: UiSpec, transition: StackTransition): void {
     return;
   }
 
+  if (transition === "none" && syncSettingsInPlace(uiSpec)) {
+    reportSize();
+    return;
+  }
+
   const nextContent = buildContent(uiSpec);
 
   const canAnimate =
@@ -474,6 +605,7 @@ function applyState(
   errorEl.textContent = "";
 
   if (payload.uiSpec) {
+    lastUiSpec = payload.uiSpec;
     renderUiSpec(payload.uiSpec, payload.transition || "none");
   }
 
@@ -481,7 +613,7 @@ function applyState(
     clearTimer();
     lastReportedHeight = 0;
     reportSize();
-  } else {
+  } else if (!recordingBindingId) {
     focusKeyTarget();
   }
 }
@@ -491,29 +623,55 @@ function renderUiSpec(uiSpec: UiSpec, transition: StackTransition): void {
 }
 
 function handlePluginKeydown(event: KeyboardEvent): void {
-  event.preventDefault();
-  event.stopPropagation();
-
   if (recordingBindingId) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (event.key === "Escape") {
+      const input = document.querySelector(
+        `input[data-binding-id="${recordingBindingId}"]`,
+      ) as HTMLInputElement | null;
+      const binding = lastUiSpec?.bindings?.find(
+        (item) => item.id === recordingBindingId,
+      );
+      if (input && binding) {
+        cancelBindingRecording(input, binding.key);
+        input.focus();
+      } else {
+        recordingBindingId = null;
+      }
+      return;
+    }
+
     const key = formatKeyFromEvent(event);
-    if (["Control", "Alt", "Shift", "Meta"].includes(event.key)) return;
+    if (["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
+      return;
+    }
     post({
       type: "settings-draft-update",
       bindingId: recordingBindingId,
       key,
     });
     recordingBindingId = null;
-    capture.blur();
-    return;
-  }
-
-  const key = formatKeyFromEvent(event);
-  if (!key || ["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
     return;
   }
 
   if (inSettings) {
+    const key = formatKeyFromEvent(event);
+    if (!key || ["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
     post({ type: "keydown", key });
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const key = formatKeyFromEvent(event);
+  if (!key || ["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
     return;
   }
 
@@ -522,21 +680,19 @@ function handlePluginKeydown(event: KeyboardEvent): void {
 }
 
 capture.addEventListener("keydown", handlePluginKeydown);
+window.addEventListener("keydown", handlePluginKeydown, true);
 
-window.addEventListener("blur", () => {
-  window.setTimeout(() => {
-    if (!document.hasFocus()) {
-      post({ type: "close" });
-    }
-  }, 0);
+panel.addEventListener(
+  "pointerdown",
+  () => {
+    focusKeyTarget();
+  },
+  true,
+);
+
+window.addEventListener("focus", () => {
+  focusKeyTarget();
 });
-
-// panel.addEventListener("pointerdown", () => {
-//   focusKeyTarget();
-// });
-// window.addEventListener("focus", () => {
-//   focusKeyTarget();
-// });
 
 window.onmessage = (event: MessageEvent) => {
   const msg = event.data.pluginMessage as PluginToUiMessage | undefined;
@@ -554,6 +710,9 @@ window.onmessage = (event: MessageEvent) => {
       break;
     case "close":
       clearTimer();
+      break;
+    case "focus":
+      focusKeyTarget();
       break;
     case "error":
       errorEl.textContent = msg.message;

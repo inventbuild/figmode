@@ -6,7 +6,8 @@ import {
   sizingSubmodeBindingIds,
 } from "./layout-capabilities";
 import { getCurrentScope, inSettingsMode, inValueEntry } from "./mode-stack";
-import { bindingsMatchSaved } from "./settings";
+import { settingsAreDirty } from "./settings";
+import { DEFAULT_HUD_INSET } from "./hud-config";
 import type { LayoutTarget } from "./target";
 
 /** Fixed HUD width — sized for the alignment grid (widest view). */
@@ -37,11 +38,14 @@ function settingsHeight(bindings: KeyBinding[]): number {
   const groupDivider = 9;
   const actions = 28;
   const error = 14;
+  const hudSection = 72;
   const groupCount = groupBindingsByScope(bindings).length;
   const groupChrome = Math.max(0, groupCount - 1) * groupDivider;
   return (
     bodyPadding +
     title +
+    sectionGap +
+    hudSection +
     sectionGap +
     groupChrome +
     bindings.length * rowHeight +
@@ -181,18 +185,36 @@ export function buildUiSpec(
   state: FigmodeState,
   bindings: KeyBinding[],
   frame: LayoutTarget | null = null,
+  options: {
+    savedHudInset?: number;
+    hasCustomHudPosition?: boolean;
+  } = {},
 ): UiSpec {
   const footer = footerKeys(bindings);
   const breadcrumb = getBreadcrumb(state);
 
   if (inSettingsMode(state)) {
     const draft = state.settingsDraft ?? bindings;
+    const hudInsetDraft = state.settingsHudInsetDraft ?? options.savedHudInset ?? DEFAULT_HUD_INSET;
+    const savedHudInset = options.savedHudInset ?? DEFAULT_HUD_INSET;
+    const hasCustomHudPosition = options.hasCustomHudPosition ?? false;
     return {
       layout: "settings",
       breadcrumb: ["Settings"],
       footer: footerKeys(bindings, { includeSettings: false }),
       bindings: draft,
-      settingsDirty: !bindingsMatchSaved(draft, bindings),
+      settingsDirty: settingsAreDirty(
+        draft,
+        bindings,
+        hudInsetDraft,
+        savedHudInset,
+        state.resetHudPositionDraft,
+        hasCustomHudPosition,
+      ),
+      hudInset: hudInsetDraft,
+      defaultHudInset: DEFAULT_HUD_INSET,
+      hasCustomHudPosition,
+      resetHudPositionDraft: state.resetHudPositionDraft,
       height: settingsHeight(draft),
     };
   }

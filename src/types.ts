@@ -33,6 +33,10 @@ export interface FigmodeState {
   autoGap: boolean;
   /** Draft key bindings while in settings mode; null when not editing. */
   settingsDraft: KeyBinding[] | null;
+  /** Draft HUD inset while in settings; null when not editing. */
+  settingsHudInsetDraft: number | null;
+  /** When true, saving settings clears a custom HUD position. */
+  resetHudPositionDraft: boolean;
 }
 
 export type BindingScope =
@@ -60,8 +64,11 @@ export type UiToPluginMessage =
   | { type: "timeout" }
   | { type: "close" }
   | { type: "settings-draft-update"; bindingId: string; key: string }
+  | { type: "settings-draft-reset-binding"; bindingId: string }
   | { type: "settings-draft-reset" }
-  | { type: "settings-save" };
+  | { type: "settings-draft-hud-inset"; inset: number }
+  | { type: "settings-draft-reset-hud" }
+  | { type: "settings-save" }
 
 export type PluginToUiMessage =
   | {
@@ -83,6 +90,7 @@ export type PluginToUiMessage =
       bindings?: KeyBinding[];
     }
   | { type: "close" }
+  | { type: "focus" }
   | { type: "error"; message: string };
 
 export interface AvailableKey {
@@ -117,4 +125,8 @@ export interface UiSpec {
   height: number;
   bindings?: KeyBinding[];
   settingsDirty?: boolean;
+  hudInset?: number;
+  defaultHudInset?: number;
+  hasCustomHudPosition?: boolean;
+  resetHudPositionDraft?: boolean;
 }

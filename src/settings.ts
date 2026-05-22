@@ -33,6 +33,32 @@ export function createDefaultDraft(): KeyBinding[] {
   return DEFAULT_BINDINGS.map((binding) => ({ ...binding }));
 }
 
+export function getDefaultBindingKey(bindingId: string): string | undefined {
+  return DEFAULT_BINDINGS.find((binding) => binding.id === bindingId)?.key;
+}
+
+export function bindingDiffersFromDefault(binding: KeyBinding): boolean {
+  const defaultKey = getDefaultBindingKey(binding.id);
+  return defaultKey !== undefined && binding.key !== defaultKey;
+}
+
+export function settingsAreDirty(
+  draft: KeyBinding[],
+  saved: KeyBinding[],
+  hudInsetDraft: number,
+  savedHudInset: number,
+  resetHudPositionDraft: boolean,
+  hasCustomHudPosition: boolean,
+): boolean {
+  if (resetHudPositionDraft && hasCustomHudPosition) {
+    return true;
+  }
+  if (hudInsetDraft !== savedHudInset) {
+    return true;
+  }
+  return !bindingsMatchSaved(draft, saved);
+}
+
 export function bindingsMatchSaved(
   draft: KeyBinding[],
   saved: KeyBinding[],

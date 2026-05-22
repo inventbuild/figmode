@@ -97,6 +97,40 @@
         color: var(--figma-color-text-secondary);
       }
 
+      .settings-section-title {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--figma-color-text-secondary);
+      }
+
+      .hud-settings {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .binding-key-wrap {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+        justify-content: flex-end;
+      }
+
+      .binding-key-wrap input {
+        width: 72px;
+      }
+
+      .binding-row input.recording {
+        border-color: var(--figma-color-border-selected);
+        color: var(--figma-color-text-secondary);
+      }
+
+      .binding-revert {
+        padding: 2px 6px;
+        min-width: 24px;
+        line-height: 1;
+      }
+
       .key-row {
         display: flex;
         align-items: center;
@@ -229,7 +263,7 @@
 
       .binding-row {
         display: grid;
-        grid-template-columns: 1fr 72px;
+        grid-template-columns: 1fr auto;
         gap: 6px;
         align-items: start;
       }

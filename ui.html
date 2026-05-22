@@ -97,6 +97,40 @@
         color: var(--figma-color-text-secondary);
       }
 
+      .settings-section-title {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--figma-color-text-secondary);
+      }
+
+      .hud-settings {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .binding-key-wrap {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+        justify-content: flex-end;
+      }
+
+      .binding-key-wrap input {
+        width: 72px;
+      }
+
+      .binding-row input.recording {
+        border-color: var(--figma-color-border-selected);
+        color: var(--figma-color-text-secondary);
+      }
+
+      .binding-revert {
+        padding: 2px 6px;
+        min-width: 24px;
+        line-height: 1;
+      }
+
       .key-row {
         display: flex;
         align-items: center;
@@ -229,7 +263,7 @@
 
       .binding-row {
         display: grid;
-        grid-template-columns: 1fr 72px;
+        grid-template-columns: 1fr auto;
         gap: 6px;
         align-items: start;
       }
@@ -1098,6 +1132,206 @@
     }));
   }
 
+  // src/key-bindings.ts
+  var DEFAULT_BINDINGS = [
+    { id: "any.pop", scope: "any", key: "`", label: "Back" },
+    { id: "any.close", scope: "any", key: "Escape", label: "Quit" },
+    {
+      id: "any.settings",
+      scope: "any",
+      key: "Shift+s",
+      label: "Open settings"
+    },
+    {
+      id: "layout.flow.freeform",
+      scope: "layout",
+      key: "f",
+      label: "Set freeform flow"
+    },
+    {
+      id: "layout.flow.column",
+      scope: "layout",
+      key: "c",
+      label: "Set column flow"
+    },
+    { id: "layout.flow.row", scope: "layout", key: "r", label: "Set row flow" },
+    { id: "layout.flow.grid", scope: "layout", key: "g", label: "Set grid flow" },
+    {
+      id: "layout.wrap.toggle",
+      scope: "layout",
+      key: "e",
+      label: "Toggle wrap"
+    },
+    {
+      id: "layout.submode.width",
+      scope: "layout",
+      key: "w",
+      label: "Width"
+    },
+    {
+      id: "layout.submode.height",
+      scope: "layout",
+      key: "h",
+      label: "Height"
+    },
+    {
+      id: "layout.submode.alignment",
+      scope: "layout",
+      key: "a",
+      label: "Alignment"
+    },
+    {
+      id: "layout.submode.spacing",
+      scope: "layout",
+      key: "s",
+      label: "Spacing"
+    },
+    {
+      id: "layout.submode.padding",
+      scope: "layout",
+      key: "p",
+      label: "Padding"
+    },
+    {
+      id: "layout.width.fixed",
+      scope: "layout.width",
+      key: "a",
+      label: "Fixed width"
+    },
+    {
+      id: "layout.width.hug",
+      scope: "layout.width",
+      key: "s",
+      label: "Hug contents"
+    },
+    {
+      id: "layout.width.fill",
+      scope: "layout.width",
+      key: "d",
+      label: "Fill container"
+    },
+    {
+      id: "layout.height.fixed",
+      scope: "layout.height",
+      key: "a",
+      label: "Fixed height"
+    },
+    {
+      id: "layout.height.hug",
+      scope: "layout.height",
+      key: "s",
+      label: "Hug contents"
+    },
+    {
+      id: "layout.height.fill",
+      scope: "layout.height",
+      key: "d",
+      label: "Fill container"
+    },
+    {
+      id: "layout.alignment.topLeft",
+      scope: "layout.alignment",
+      key: "q",
+      label: "Top-Left"
+    },
+    {
+      id: "layout.alignment.topCenter",
+      scope: "layout.alignment",
+      key: "w",
+      label: "Top"
+    },
+    {
+      id: "layout.alignment.topRight",
+      scope: "layout.alignment",
+      key: "e",
+      label: "Top-Right"
+    },
+    {
+      id: "layout.alignment.middleLeft",
+      scope: "layout.alignment",
+      key: "a",
+      label: "Left"
+    },
+    {
+      id: "layout.alignment.middleCenter",
+      scope: "layout.alignment",
+      key: "s",
+      label: "Center"
+    },
+    {
+      id: "layout.alignment.middleRight",
+      scope: "layout.alignment",
+      key: "d",
+      label: "Right"
+    },
+    {
+      id: "layout.alignment.bottomLeft",
+      scope: "layout.alignment",
+      key: "z",
+      label: "Lower-Left"
+    },
+    {
+      id: "layout.alignment.bottomCenter",
+      scope: "layout.alignment",
+      key: "x",
+      label: "Bottom"
+    },
+    {
+      id: "layout.alignment.bottomRight",
+      scope: "layout.alignment",
+      key: "c",
+      label: "Lower-Right"
+    },
+    {
+      id: "layout.spacing.gapToggle",
+      scope: "layout.spacing",
+      key: "f",
+      label: "Toggle auto / px gap"
+    },
+    {
+      id: "layout.padding.all",
+      scope: "layout.padding",
+      key: "s",
+      label: "All"
+    },
+    {
+      id: "layout.padding.paddingTop",
+      scope: "layout.padding",
+      key: "w",
+      label: "Top"
+    },
+    {
+      id: "layout.padding.paddingLeft",
+      scope: "layout.padding",
+      key: "a",
+      label: "Left"
+    },
+    {
+      id: "layout.padding.paddingRight",
+      scope: "layout.padding",
+      key: "d",
+      label: "Right"
+    },
+    {
+      id: "layout.padding.paddingBottom",
+      scope: "layout.padding",
+      key: "x",
+      label: "Bottom"
+    },
+    {
+      id: "layout.padding.paddingX",
+      scope: "layout.padding",
+      key: "q",
+      label: "Horizontal"
+    },
+    {
+      id: "layout.padding.paddingY",
+      scope: "layout.padding",
+      key: "e",
+      label: "Vertical"
+    }
+  ];
+
   // ui/main.ts
   var capture = document.getElementById("capture");
   var panel = document.getElementById("panel");
@@ -1119,12 +1353,69 @@
   var inSettings = false;
   var inValueMode = false;
   var recordingBindingId = null;
+  var lastUiSpec = null;
   var lastReportedHeight = 0;
   var reportSizeFrameId = null;
   var stackAnimating = false;
   var reduceMotion = window.matchMedia(
     "(prefers-reduced-motion: reduce)"
   ).matches;
+  function startBindingRecording(bindingId, input) {
+    recordingBindingId = bindingId;
+    input.classList.add("recording");
+    input.value = "Press a key\u2026";
+    requestAnimationFrame(() => capture.focus({ preventScroll: true }));
+  }
+  function cancelBindingRecording(input, bindingKey) {
+    if (recordingBindingId !== input.dataset.bindingId) {
+      return;
+    }
+    recordingBindingId = null;
+    input.classList.remove("recording");
+    input.value = bindingKey;
+  }
+  function syncSettingsInPlace(uiSpec) {
+    var _a, _b, _c;
+    if (uiSpec.layout !== "settings") {
+      return false;
+    }
+    const saveButton = document.getElementById(
+      "save-bindings"
+    );
+    if (saveButton) {
+      saveButton.hidden = !uiSpec.settingsDirty;
+    }
+    for (const binding of uiSpec.bindings || []) {
+      const input = document.querySelector(
+        `input[data-binding-id="${binding.id}"]`
+      );
+      const revert = document.querySelector(
+        `button[data-revert-binding-id="${binding.id}"]`
+      );
+      const defaultKey = (_a = DEFAULT_BINDINGS.find((item) => item.id === binding.id)) == null ? void 0 : _a.key;
+      const differs = defaultKey !== void 0 && binding.key !== defaultKey;
+      if (input && recordingBindingId !== binding.id) {
+        input.value = binding.key;
+        input.classList.remove("recording");
+      }
+      if (revert) {
+        revert.hidden = !differs;
+      }
+    }
+    const insetInput = document.getElementById(
+      "hud-inset-input"
+    );
+    if (insetInput && document.activeElement !== insetInput) {
+      insetInput.value = String((_c = (_b = uiSpec.hudInset) != null ? _b : uiSpec.defaultHudInset) != null ? _c : 30);
+    }
+    const resetHudButton = document.getElementById(
+      "reset-hud-position"
+    );
+    if (resetHudButton) {
+      resetHudButton.textContent = uiSpec.resetHudPositionDraft ? "Reset HUD on save" : "Reset HUD position";
+    }
+    return true;
+  }
   function post(message) {
     parent.postMessage({ pluginMessage: message }, "*");
   }
@@ -1270,6 +1561,7 @@
     const list = el("div", "binding-list");
     const groups = groupBindingsByScope(bindings);
     groups.forEach((group, index) => {
+      var _a;
       if (index > 0) {
         const divider = document.createElement("hr");
         divider.className = "settings-divider";
@@ -1282,28 +1574,78 @@
         const path = bindingFullPath(binding.scope, binding.label);
         label.textContent = path;
         label.title = path;
+        const keyWrap = el("div", "binding-key-wrap");
         const input = document.createElement("input");
         input.value = binding.key;
         input.readOnly = true;
         input.dataset.bindingId = binding.id;
         input.addEventListener("focus", () => {
-          recordingBindingId = binding.id;
-          input.value = "Press a key\u2026";
+          startBindingRecording(binding.id, input);
         });
         input.addEventListener("blur", () => {
-          if (recordingBindingId === binding.id) {
-            recordingBindingId = null;
-            input.value = binding.key;
-          }
+          window.setTimeout(() => {
+            if (document.activeElement === capture) {
+              return;
+            }
+            cancelBindingRecording(input, binding.key);
+          }, 0);
         });
-        row.append(label, input);
+        keyWrap.appendChild(input);
+        const defaultKey = (_a = DEFAULT_BINDINGS.find((item) => item.id === binding.id)) == null ? void 0 : _a.key;
+        const revert = el("button", "binding-revert", "\u21A9");
+        revert.type = "button";
+        revert.title = "Revert to default";
+        revert.dataset.revertBindingId = binding.id;
+        revert.hidden = defaultKey === void 0 || binding.key === defaultKey;
+        revert.onclick = () => {
+          post({ type: "settings-draft-reset-binding", bindingId: binding.id });
+        };
+        keyWrap.appendChild(revert);
+        row.append(label, keyWrap);
         list.appendChild(row);
       }
     });
     return list;
   }
+  function buildHudSettingsSection(uiSpec) {
+    var _a, _b;
+    const section = el("div", "hud-settings");
+    section.appendChild(el("div", "settings-section-title", "HUD"));
+    const insetRow = el("div", "binding-row");
+    const insetLabel = el("label", void 0, "Default inset (px)");
+    const insetInput = document.createElement("input");
+    insetInput.type = "number";
+    insetInput.min = "0";
+    insetInput.id = "hud-inset-input";
+    insetInput.value = String((_b = (_a = uiSpec.hudInset) != null ? _a : uiSpec.defaultHudInset) != null ? _b : 30);
+    insetInput.addEventListener("change", () => {
+      const inset = Number.parseInt(insetInput.value, 10);
+      if (Number.isNaN(inset)) {
+        return;
+      }
+      post({ type: "settings-draft-hud-inset", inset });
+    });
+    const insetWrap = el("div", "binding-key-wrap");
+    insetWrap.appendChild(insetInput);
+    insetRow.append(insetLabel, insetWrap);
+    const resetHudButton = el("button", void 0, "Reset HUD position");
+    resetHudButton.type = "button";
+    resetHudButton.id = "reset-hud-position";
+    if (uiSpec.resetHudPositionDraft) {
+      resetHudButton.textContent = "Reset HUD on save";
+    }
+    resetHudButton.onclick = () => {
+      post({ type: "settings-draft-reset-hud" });
+    };
+    section.append(insetRow, resetHudButton);
+    return section;
+  }
   function buildSettingsView(uiSpec) {
     const wrap2 = el("div", "settings-view");
+    wrap2.appendChild(buildHudSettingsSection(uiSpec));
+    const divider = document.createElement("hr");
+    divider.className = "settings-divider";
+    wrap2.appendChild(divider);
     wrap2.appendChild(renderBindingRows(uiSpec.bindings || []));
     const actions = el("div", "settings-actions");
     const resetButton = el("button", void 0, "Reset to defaults");
@@ -1403,6 +1745,7 @@
   }
   function updateChrome(uiSpec) {
     var _a;
+    breadcrumbHost.classList.add("hud-header");
     breadcrumbHost.replaceChildren();
     footerHost.replaceChildren();
     if ((_a = uiSpec.breadcrumb) == null ? void 0 : _a.length) {
@@ -1470,6 +1813,10 @@
     if (transition === "none" && syncValueInputInPlace(uiSpec)) {
       return;
     }
+    if (transition === "none" && syncSettingsInPlace(uiSpec)) {
+      reportSize();
+      return;
+    }
     const nextContent = buildContent(uiSpec);
     const canAnimate = !reduceMotion && !stackAnimating && currentLayer && (transition === "push" || transition === "pop");
     if (!canAnimate) {
@@ -1489,13 +1836,14 @@
     inValueMode = Boolean(top == null ? void 0 : top.valueKind);
     errorEl.textContent = "";
     if (payload.uiSpec) {
+      lastUiSpec = payload.uiSpec;
       renderUiSpec(payload.uiSpec, payload.transition || "none");
     }
     if (inSettings) {
       clearTimer();
       lastReportedHeight = 0;
       reportSize();
-    } else {
+    } else if (!recordingBindingId) {
       focusKeyTarget();
     }
   }
@@ -1503,38 +1851,67 @@
     setStackContent(uiSpec, transition);
   }
   function handlePluginKeydown(event) {
-    event.preventDefault();
-    event.stopPropagation();
+    var _a;
     if (recordingBindingId) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === "Escape") {
+        const input = document.querySelector(
+          `input[data-binding-id="${recordingBindingId}"]`
+        );
+        const binding = (_a = lastUiSpec == null ? void 0 : lastUiSpec.bindings) == null ? void 0 : _a.find(
+          (item) => item.id === recordingBindingId
+        );
+        if (input && binding) {
+          cancelBindingRecording(input, binding.key);
+          input.focus();
+        } else {
+          recordingBindingId = null;
+        }
+        return;
+      }
       const key2 = formatKeyFromEvent(event);
-      if (["Control", "Alt", "Shift", "Meta"].includes(event.key)) return;
+      if (["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
+        return;
+      }
       post({
         type: "settings-draft-update",
         bindingId: recordingBindingId,
         key: key2
       });
       recordingBindingId = null;
-      capture.blur();
-      return;
-    }
-    const key = formatKeyFromEvent(event);
-    if (!key || ["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
       return;
     }
     if (inSettings) {
-      post({ type: "keydown", key });
+      const key2 = formatKeyFromEvent(event);
+      if (!key2 || ["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      post({ type: "keydown", key: key2 });
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const key = formatKeyFromEvent(event);
+    if (!key || ["Control", "Alt", "Shift", "Meta"].includes(event.key)) {
       return;
     }
     post({ type: "keydown", key });
     armTimer();
   }
   capture.addEventListener("keydown", handlePluginKeydown);
-  window.addEventListener("blur", () => {
-    window.setTimeout(() => {
-      if (!document.hasFocus()) {
-        post({ type: "close" });
-      }
-    }, 0);
+  window.addEventListener("keydown", handlePluginKeydown, true);
+  panel.addEventListener(
+    "pointerdown",
+    () => {
+      focusKeyTarget();
+    },
+    true
+  );
+  window.addEventListener("focus", () => {
+    focusKeyTarget();
   });
   window.onmessage = (event) => {
     const msg = event.data.pluginMessage;
@@ -1551,6 +1928,9 @@
         break;
       case "close":
         clearTimer();
+        break;
+      case "focus":
+        focusKeyTarget();
         break;
       case "error":
         errorEl.textContent = msg.message;
